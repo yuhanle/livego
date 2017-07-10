@@ -1,8 +1,8 @@
 package ts
 
 import (
+	"github.com/livego/av"
 	"io"
-	"github.com/gwuhaolin/livego/av"
 )
 
 const (

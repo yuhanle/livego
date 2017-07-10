@@ -1,15 +1,15 @@
 package flv
 
 import (
+	"flag"
+	"github.com/livego/av"
+	"github.com/livego/protocol/amf"
+	"github.com/livego/utils/pio"
+	"github.com/livego/utils/uid"
+	"log"
+	"os"
 	"strings"
 	"time"
-	"flag"
-	"os"
-	"log"
-	"github.com/gwuhaolin/livego/utils/uid"
-	"github.com/gwuhaolin/livego/protocol/amf"
-	"github.com/gwuhaolin/livego/av"
-	"github.com/gwuhaolin/livego/utils/pio"
 )
 
 var (

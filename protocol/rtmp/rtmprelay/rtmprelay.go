@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/gwuhaolin/livego/protocol/amf"
-	"github.com/gwuhaolin/livego/protocol/rtmp/core"
+	"github.com/livego/protocol/amf"
+	"github.com/livego/protocol/rtmp/core"
 	"io"
 	"log"
 )
@@ -122,4 +122,6 @@ func (self *RtmpRelay) Stop() {
 	self.startflag = false
 	self.sndctrl_chan <- STOP_CTRL
 
+	self.connectPlayClient.Close(nil)
+	self.connectPublishClient.Close(nil)
 }

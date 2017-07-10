@@ -13,7 +13,7 @@ import (
 	"application":"live",
 	"live":"on",
 	"hls":"on",
-	"static_push":["rtmp://xx/live"]
+	"static_push":["alpush.xxxx.cn", "rtmp://xx/live"]
 	}
 	]
 }

@@ -3,13 +3,13 @@ package httpopera
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gwuhaolin/livego/protocol/rtmp/rtmprelay"
+	"github.com/livego/av"
+	"github.com/livego/protocol/rtmp"
+	"github.com/livego/protocol/rtmp/rtmprelay"
 	"io"
+	"log"
 	"net"
 	"net/http"
-	"log"
-	"github.com/gwuhaolin/livego/av"
-	"github.com/gwuhaolin/livego/protocol/rtmp"
 )
 
 type Response struct {

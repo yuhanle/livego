@@ -1,15 +1,15 @@
 package httpflv
 
 import (
-	"time"
 	"errors"
 	"fmt"
+	"github.com/livego/av"
+	"github.com/livego/protocol/amf"
+	"github.com/livego/utils/pio"
+	"github.com/livego/utils/uid"
 	"log"
 	"net/http"
-	"github.com/gwuhaolin/livego/utils/uid"
-	"github.com/gwuhaolin/livego/protocol/amf"
-	"github.com/gwuhaolin/livego/av"
-	"github.com/gwuhaolin/livego/utils/pio"
+	"time"
 )
 
 const (

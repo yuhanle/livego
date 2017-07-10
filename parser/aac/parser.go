@@ -2,8 +2,8 @@ package aac
 
 import (
 	"errors"
+	"github.com/livego/av"
 	"io"
-	"github.com/gwuhaolin/livego/av"
 )
 
 type mpegExtension struct {

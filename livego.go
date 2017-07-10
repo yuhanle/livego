@@ -2,11 +2,11 @@ package main
 
 import (
 	"flag"
-	"github.com/gwuhaolin/livego/configure"
-	"github.com/gwuhaolin/livego/protocol/hls"
-	"github.com/gwuhaolin/livego/protocol/httpflv"
-	"github.com/gwuhaolin/livego/protocol/httpopera"
-	"github.com/gwuhaolin/livego/protocol/rtmp"
+	"github.com/livego/configure"
+	"github.com/livego/protocol/hls"
+	"github.com/livego/protocol/httpflv"
+	"github.com/livego/protocol/httpopera"
+	"github.com/livego/protocol/rtmp"
 	"log"
 	"net"
 	"time"
@@ -107,6 +107,10 @@ func startHTTPOpera(stream *rtmp.RtmpStream) {
 	}
 }
 
+func startPProf() {
+	http.ListenAndServe("localhost:6060", nil)
+}
+
 func main() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -121,10 +125,10 @@ func main() {
 	}
 
 	stream := rtmp.NewRtmpStream()
-	hlsServer := startHls()
+	//hlsServer := startHls()
 	startHTTPFlv(stream)
 	startHTTPOpera(stream)
 
-	startRtmp(stream, hlsServer)
-	//startRtmp(stream, nil)
+	//startRtmp(stream, hlsServer)
+	startRtmp(stream, nil)
 }

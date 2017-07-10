@@ -2,10 +2,10 @@ package core
 
 import (
 	"bytes"
+	"github.com/livego/utils/pool"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"testing"
-	"github.com/stretchr/testify/assert"
-	"github.com/gwuhaolin/livego/utils/pool"
 )
 
 func TestConnReadNormal(t *testing.T) {

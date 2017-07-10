@@ -10,7 +10,7 @@ import (
 
 	"time"
 
-	"github.com/gwuhaolin/livego/utils/pio"
+	"github.com/livego/utils/pio"
 )
 
 var (
