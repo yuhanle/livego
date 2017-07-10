@@ -107,10 +107,6 @@ func startHTTPOpera(stream *rtmp.RtmpStream) {
 	}
 }
 
-func startPProf() {
-	http.ListenAndServe("localhost:6060", nil)
-}
-
 func main() {
 	defer func() {
 		if r := recover(); r != nil {

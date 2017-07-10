@@ -25,7 +25,7 @@ func main() {
 		client.Start(handle)
 	*/
 	flvurl := "http://pull99.a8.com/live/1499666817758063.flv"
-	rtmpurl := "rtmp://alpush.xxxx.cn/live/1499666817758063_test"
+	rtmpurl := "rtmp://alpush.inke.cn/live/1499666817758063_test"
 	flvPull := rtmprelay.NewFlvPull(&flvurl, &rtmpurl)
 	err := flvPull.Start()
 	if err != nil {
