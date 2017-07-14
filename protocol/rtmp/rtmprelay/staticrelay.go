@@ -7,15 +7,20 @@ import (
 	"github.com/livego/configure"
 	"github.com/livego/protocol/rtmp/core"
 	"log"
+	"strconv"
+	"strings"
 	"sync"
 )
 
 type StaticPush struct {
-	RtmpUrl       string
-	packet_chan   chan *av.Packet
-	sndctrl_chan  chan string
-	connectClient *core.ConnClient
-	startflag     bool
+	RtmpUrl                string
+	RtmpSubUrls            [2]string
+	packet_chan            chan *av.Packet
+	sndctrl_chan           chan string
+	connectClient          *core.ConnClient
+	startflag              bool
+	lastIFrameTimestamp    uint32
+	lastSubIFrameTimestamp [2]uint32
 }
 
 var G_StaticPushMap = make(map[string](*StaticPush))
@@ -25,14 +30,73 @@ var (
 	STATIC_RELAY_STOP_CTRL = "STATIC_RTMPRELAY_STOP"
 )
 
-func GetStaticPushList(appname string) ([]string, error) {
-	pushurlList, ok := configure.GetStaticPushUrlList(appname)
+const TIMESTAMP_SEND_INTERVAL = 2500
+
+func GetStaticPushList(url string) ([]string, error) {
+	pushurlList, ok := configure.GetStaticPushUrlList(url)
 
 	if !ok {
 		return nil, errors.New("no static push url")
 	}
 
 	return pushurlList, nil
+}
+
+func GetIndexbySuburl(subrtmpurl string) int {
+	retIndex := -1
+	argArray := strings.Split(subrtmpurl, "/")
+
+	if len(argArray) < 2 {
+		return retIndex
+	}
+
+	argString := argArray[len(argArray)-2]
+
+	foundIndex := strings.Index(argString, "_")
+
+	if foundIndex < 0 {
+		return retIndex
+	}
+
+	numString := argString[foundIndex-1 : foundIndex]
+	retIndex, err := strconv.Atoi(numString)
+	if err != nil {
+		log.Printf("atoi:%v", err)
+		retIndex = -1
+	}
+
+	return retIndex
+}
+
+func GetStaticPushObjectbySubstream(subrtmpurl string) (int, *StaticPush) {
+	subUpstreamUrl := ""
+
+	upstreamPrefixUrl, ok := configure.GetSubStaticMasterPushUrl(subrtmpurl)
+	if upstreamPrefixUrl != "" && ok {
+		lastIndex := strings.LastIndex(subrtmpurl, "/")
+		lastPart := subrtmpurl[lastIndex:]
+		subUpstreamUrl = upstreamPrefixUrl + lastPart
+
+		//log.Printf("subUpstreamUrl=%s", subUpstreamUrl)
+	}
+
+	subStreamIndex := GetIndexbySuburl(subrtmpurl)
+	if subStreamIndex > 2 || subStreamIndex < 0 {
+		return -1, nil
+	}
+
+	subStreamIndex--
+	if subUpstreamUrl != "" {
+		staticPushObj, err := GetStaticPushObject(subUpstreamUrl)
+		if err == nil && staticPushObj != nil {
+			//log.Printf("GetStaticPushObjectbySubstream: upstream=%s, substream=%s",
+			//	subUpstreamUrl, staticPushObj.RtmpSubUrls[subStreamIndex])
+			if staticPushObj.RtmpSubUrls[subStreamIndex] == "" || staticPushObj.RtmpSubUrls[subStreamIndex] == subrtmpurl {
+				return subStreamIndex, staticPushObj
+			}
+		}
+	}
+	return -1, nil
 }
 
 func GetAndCreateStaticPushObject(rtmpurl string) *StaticPush {
@@ -82,11 +146,14 @@ func ReleaseStaticPushObject(rtmpurl string) {
 
 func NewStaticPush(rtmpurl string) *StaticPush {
 	return &StaticPush{
-		RtmpUrl:       rtmpurl,
-		packet_chan:   make(chan *av.Packet, 500),
-		sndctrl_chan:  make(chan string),
-		connectClient: nil,
-		startflag:     false,
+		RtmpUrl:                rtmpurl,
+		RtmpSubUrls:            [2]string{"", ""},
+		packet_chan:            make(chan *av.Packet, 500),
+		sndctrl_chan:           make(chan string),
+		connectClient:          nil,
+		startflag:              false,
+		lastIFrameTimestamp:    0,
+		lastSubIFrameTimestamp: [2]uint32{0, 0},
 	}
 }
 
@@ -104,9 +171,48 @@ func (self *StaticPush) Start() error {
 		return err
 	}
 	log.Printf("static publish server addr:%v started, streamid=%d", self.RtmpUrl, self.connectClient.GetStreamId())
+
+	/*
+		log.Printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+		tempUrl := "rtmp://inke.8686c.com/live/inke_1"
+		index := 0
+		err = self.connectClient.StartSubStream(tempUrl, index, "publish")
+		if err != nil {
+			log.Printf("connectClient.StartSubStream index=%d url=%v error=%v", index, tempUrl, err)
+			return err
+		}
+		log.Printf("static publish server addr:%v started, index=%d, streamid=%d", tempUrl, index, self.connectClient.GetSubStreamId(index))
+	*/
 	go self.HandleAvPacket()
 
 	self.startflag = true
+	return nil
+}
+
+func (self *StaticPush) StartSubUrl(subrtmpurl string) error {
+	if !self.startflag {
+		log.Printf("Master StaticPush has not started %s", self.RtmpUrl)
+		return errors.New(fmt.Sprintf("Master StaticPush has not started %s", self.RtmpUrl))
+	}
+
+	saveIndex := -1
+	for index, rtmpurlString := range self.RtmpSubUrls {
+		if rtmpurlString == "" {
+			saveIndex = index
+			break
+		}
+	}
+	if saveIndex == -1 {
+		return errors.New(fmt.Sprintf("Master StaticPush has full sub url", self.RtmpUrl))
+	}
+
+	err := self.connectClient.StartSubStream(subrtmpurl, saveIndex, "publish")
+	if err != nil {
+		log.Printf("connectClient.StartSubStream index=%d url=%v error=%v", saveIndex, subrtmpurl, err)
+		return err
+	}
+	self.RtmpSubUrls[saveIndex] = subrtmpurl
+	log.Printf("StartSubUrl:%v started, index=%d, streamid=%d", subrtmpurl, saveIndex, self.connectClient.GetSubStreamId(saveIndex))
 	return nil
 }
 
@@ -120,12 +226,62 @@ func (self *StaticPush) Stop() {
 	self.startflag = false
 }
 
+func (self *StaticPush) StopSubUrl(subrtmpurl string) {
+	saveIndex := -1
+	for index, rtmpurlString := range self.RtmpSubUrls {
+		if rtmpurlString == subrtmpurl {
+			saveIndex = index
+			break
+		}
+	}
+
+	if saveIndex != -1 {
+		log.Printf("StopSubUrl: %s", self.RtmpSubUrls[saveIndex])
+		self.RtmpSubUrls[saveIndex] = ""
+	}
+}
+
 func (self *StaticPush) WriteAvPacket(packet *av.Packet) {
 	if !self.startflag {
 		return
 	}
 
 	self.packet_chan <- packet
+}
+
+func (self *StaticPush) sendSyncTimestamp(p *av.Packet) {
+	if !self.startflag {
+		return
+	}
+
+	var lasttimestamp uint32
+	if p.StreamIndex > 0 { //sub stream
+		lasttimestamp = self.lastSubIFrameTimestamp[p.StreamIndex-1]
+	} else {
+		lasttimestamp = self.lastIFrameTimestamp
+	}
+	if p.IsVideo {
+		packet := p.Data[:]
+
+		//for I frame or timeout
+		if (packet[0] == 0x17 && packet[1] == 0x00) || (packet[0] == 0x17 && packet[1] == 0x01) {
+			if p.StreamIndex > 0 {
+				self.lastSubIFrameTimestamp[p.StreamIndex-1] = p.TimeStamp
+				self.connectClient.WriteSubTimestampMeta(int(p.StreamIndex-1), p.TimeStamp)
+			} else {
+				self.lastIFrameTimestamp = p.TimeStamp
+				self.connectClient.WriteTimestampMeta(p.TimeStamp)
+			}
+		} else if (p.TimeStamp - lasttimestamp) >= TIMESTAMP_SEND_INTERVAL {
+			if p.StreamIndex > 0 {
+				self.lastSubIFrameTimestamp[p.StreamIndex-1] = p.TimeStamp
+				self.connectClient.WriteSubTimestampMeta(int(p.StreamIndex-1), p.TimeStamp)
+			} else {
+				self.lastIFrameTimestamp = p.TimeStamp
+				self.connectClient.WriteTimestampMeta(p.TimeStamp)
+			}
+		}
+	}
 }
 
 func (self *StaticPush) sendPacket(p *av.Packet) {
@@ -136,8 +292,17 @@ func (self *StaticPush) sendPacket(p *av.Packet) {
 
 	cs.Data = p.Data
 	cs.Length = uint32(len(p.Data))
-	cs.StreamID = self.connectClient.GetStreamId()
+
 	cs.Timestamp = p.TimeStamp
+
+	if p.StreamIndex > 0 {
+		index := p.StreamIndex - 1
+		cs.StreamID = self.connectClient.GetSubStreamId(int(index))
+	} else {
+		cs.StreamID = self.connectClient.GetStreamId()
+	}
+
+	self.sendSyncTimestamp(p)
 	//cs.Timestamp += v.BaseTimeStamp()
 
 	//log.Printf("Static sendPacket: rtmpurl=%s, length=%d, streamid=%d",
@@ -153,6 +318,25 @@ func (self *StaticPush) sendPacket(p *av.Packet) {
 	}
 
 	self.connectClient.Write(cs)
+	/*
+		var csSub core.ChunkStream
+		csSub.Data = p.Data
+		csSub.Length = uint32(len(p.Data))
+		csSub.StreamID = self.connectClient.GetSubStreamId(0)
+		csSub.Timestamp = p.TimeStamp
+
+		if p.IsVideo {
+			csSub.TypeID = av.TAG_VIDEO
+		} else {
+			if p.IsMetadata {
+				csSub.TypeID = av.TAG_SCRIPTDATAAMF0
+			} else {
+				csSub.TypeID = av.TAG_AUDIO
+			}
+		}
+
+		self.connectClient.Write(csSub)
+	*/
 }
 
 func (self *StaticPush) HandleAvPacket() {

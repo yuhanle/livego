@@ -8,6 +8,7 @@ import (
 	"github.com/livego/configure"
 	"github.com/livego/container/flv"
 	"github.com/livego/protocol/rtmp/core"
+	"github.com/livego/protocol/rtmp/rtmprelay"
 	"github.com/livego/utils/uid"
 	"log"
 	"net"
@@ -110,19 +111,23 @@ func (s *Server) handleConn(conn *core.Conn) error {
 		return err
 	}
 
-	appname, _, _ := connServer.GetInfo()
-
-	if ret := configure.CheckAppName(appname); !ret {
-		err := errors.New("application name=%s is not configured")
-		conn.Close()
-		log.Println("CheckAppName err:", err)
-		return err
-	}
+	appname, name, url := connServer.GetInfo()
+	log.Printf("handleConn: appname=%s, name=%s, url=%s", appname, name, url)
 
 	log.Printf("handleConn: IsPublisher=%v", connServer.IsPublisher())
 	if connServer.IsPublisher() {
-		if pushlist, ret := configure.GetStaticPushUrlList(appname); ret && (pushlist != nil) {
+		//test code only for debug
+		if pushlist, ret := configure.GetStaticPushUrlList(url); ret && (pushlist != nil) {
 			log.Printf("GetStaticPushUrlList: %v", pushlist)
+		}
+		if upstreamUrl, ret := configure.GetSubStaticMasterPushUrl(url); ret && (upstreamUrl != "") {
+			log.Printf("Sub static upstream:%s", upstreamUrl)
+			index, staticPushObj := rtmprelay.GetStaticPushObjectbySubstream(url)
+			if staticPushObj != nil {
+				log.Printf("Get substream(%s) static push object(%s) index=%d", url, staticPushObj.RtmpUrl, index)
+			} else {
+				log.Printf("Get substream(%s) static push object is null", url)
+			}
 		}
 		reader := NewVirReader(connServer)
 		s.handler.HandleReader(reader)

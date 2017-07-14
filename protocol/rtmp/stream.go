@@ -8,7 +8,7 @@ import (
 	"github.com/orcaman/concurrent-map"
 	"log"
 	//"reflect"
-	"strings"
+	//"strings"
 	"time"
 )
 
@@ -146,33 +146,38 @@ func (s *Stream) AddWriter(w av.WriteCloser) {
 	s.ws.Set(info.UID, pw)
 }
 
+func (s *Stream) StartSubStaticPush() (ret bool) {
+	ret = false
+	_, masterPushObj := rtmprelay.GetStaticPushObjectbySubstream(s.info.URL)
+	if masterPushObj != nil {
+		err := masterPushObj.StartSubUrl(s.info.URL)
+		if err == nil {
+			ret = true
+		}
+	}
+	return
+}
+
+func (s *Stream) StopSubStaticPush() {
+	_, masterPushObj := rtmprelay.GetStaticPushObjectbySubstream(s.info.URL)
+	if masterPushObj != nil {
+		masterPushObj.StopSubUrl(s.info.URL)
+	}
+}
+
 /*检测本application下是否配置static_push,
 如果配置, 启动push远端的连接*/
-func (s *Stream) StartStaticPush() {
-	key := s.info.Key
-
-	dscr := strings.Split(key, "/")
-	if len(dscr) < 1 {
-		return
-	}
-
-	index := strings.Index(key, "/")
-	if index < 0 {
-		return
-	}
-
-	streamname := key[index+1:]
-	appname := dscr[0]
-
-	log.Printf("StartStaticPush: current streamname=%s， appname=%s", streamname, appname)
-	pushurllist, err := rtmprelay.GetStaticPushList(appname)
+func (s *Stream) StartStaticPush() (ret bool) {
+	ret = false
+	log.Printf("StartStaticPush: current url=%s", s.info.URL)
+	pushurllist, err := rtmprelay.GetStaticPushList(s.info.URL)
 	if err != nil || len(pushurllist) < 1 {
 		log.Printf("StartStaticPush: GetStaticPushList error=%v", err)
 		return
 	}
 
 	for _, pushurl := range pushurllist {
-		pushurl := pushurl + "/" + streamname
+		//pushurl := pushurl + "/" + streamname
 		log.Printf("StartStaticPush: static pushurl=%s", pushurl)
 
 		staticpushObj := rtmprelay.GetAndCreateStaticPushObject(pushurl)
@@ -181,39 +186,26 @@ func (s *Stream) StartStaticPush() {
 				log.Printf("StartStaticPush: staticpushObj.Start %s error=%v", pushurl, err)
 			} else {
 				log.Printf("StartStaticPush: staticpushObj.Start %s ok", pushurl)
+				ret = true
 			}
 		} else {
 			log.Printf("StartStaticPush GetStaticPushObject %s error", pushurl)
 		}
 	}
+
+	return
 }
 
 func (s *Stream) StopStaticPush() {
-	key := s.info.Key
-
-	log.Printf("StopStaticPush......%s", key)
-	dscr := strings.Split(key, "/")
-	if len(dscr) < 1 {
-		return
-	}
-
-	index := strings.Index(key, "/")
-	if index < 0 {
-		return
-	}
-
-	streamname := key[index+1:]
-	appname := dscr[0]
-
-	log.Printf("StopStaticPush: current streamname=%s， appname=%s", streamname, appname)
-	pushurllist, err := rtmprelay.GetStaticPushList(appname)
+	log.Printf("StopStaticPush: current url=%s", s.info.URL)
+	pushurllist, err := rtmprelay.GetStaticPushList(s.info.URL)
 	if err != nil || len(pushurllist) < 1 {
 		log.Printf("StopStaticPush: GetStaticPushList error=%v", err)
 		return
 	}
 
 	for _, pushurl := range pushurllist {
-		pushurl := pushurl + "/" + streamname
+		//pushurl := pushurl + "/" + streamname
 		log.Printf("StopStaticPush: static pushurl=%s", pushurl)
 
 		staticpushObj, err := rtmprelay.GetStaticPushObject(pushurl)
@@ -227,32 +219,36 @@ func (s *Stream) StopStaticPush() {
 	}
 }
 
-func (s *Stream) IsSendStaticPush() bool {
-	key := s.info.Key
+func (s *Stream) IsSubSendStaticPush() bool {
+	ret := false
+	_, masterPushObj := rtmprelay.GetStaticPushObjectbySubstream(s.info.URL)
+	if masterPushObj != nil {
+		ret = true
+	}
+	//log.Printf("IsSubSendStaticPush: %s, ret=%v", s.info.URL, ret)
+	return ret
+}
 
-	dscr := strings.Split(key, "/")
-	if len(dscr) < 1 {
-		return false
+func (s *Stream) SendSubStaticPush(packet av.Packet) {
+	index, masterPushObj := rtmprelay.GetStaticPushObjectbySubstream(s.info.URL)
+	if masterPushObj == nil {
+		return
 	}
 
-	appname := dscr[0]
+	packet.StreamIndex = uint32(index + 1)
 
-	//log.Printf("SendStaticPush: current streamname=%s， appname=%s", streamname, appname)
-	pushurllist, err := rtmprelay.GetStaticPushList(appname)
+	masterPushObj.WriteAvPacket(&packet)
+}
+
+func (s *Stream) IsSendStaticPush() bool {
+	pushurllist, err := rtmprelay.GetStaticPushList(s.info.URL)
 	if err != nil || len(pushurllist) < 1 {
 		//log.Printf("SendStaticPush: GetStaticPushList error=%v", err)
 		return false
 	}
 
-	index := strings.Index(key, "/")
-	if index < 0 {
-		return false
-	}
-
-	streamname := key[index+1:]
-
 	for _, pushurl := range pushurllist {
-		pushurl := pushurl + "/" + streamname
+		//pushurl := pushurl + "/" + streamname
 		//log.Printf("SendStaticPush: static pushurl=%s", pushurl)
 
 		staticpushObj, err := rtmprelay.GetStaticPushObject(pushurl)
@@ -268,36 +264,15 @@ func (s *Stream) IsSendStaticPush() bool {
 }
 
 func (s *Stream) SendStaticPush(packet av.Packet) {
-	key := s.info.Key
-
-	dscr := strings.Split(key, "/")
-	if len(dscr) < 1 {
-		return
-	}
-
-	index := strings.Index(key, "/")
-	if index < 0 {
-		return
-	}
-
-	streamname := key[index+1:]
-	appname := dscr[0]
-
-	//log.Printf("SendStaticPush: current streamname=%s， appname=%s", streamname, appname)
-	pushurllist, err := rtmprelay.GetStaticPushList(appname)
+	pushurllist, err := rtmprelay.GetStaticPushList(s.info.URL)
 	if err != nil || len(pushurllist) < 1 {
-		//log.Printf("SendStaticPush: GetStaticPushList error=%v", err)
 		return
 	}
 
 	for _, pushurl := range pushurllist {
-		pushurl := pushurl + "/" + streamname
-		//log.Printf("SendStaticPush: static pushurl=%s", pushurl)
-
 		staticpushObj, err := rtmprelay.GetStaticPushObject(pushurl)
 		if (staticpushObj != nil) && (err == nil) {
 			staticpushObj.WriteAvPacket(&packet)
-			//log.Printf("SendStaticPush: WriteAvPacket %s ", pushurl)
 		} else {
 			log.Printf("SendStaticPush GetStaticPushObject %s error", pushurl)
 		}
@@ -310,7 +285,13 @@ func (s *Stream) TransStart() {
 
 	log.Printf("TransStart:%v", s.info)
 
-	s.StartStaticPush()
+	ret := s.StartStaticPush()
+
+	if !ret {
+		if s.IsSubSendStaticPush() {
+			s.StartSubStaticPush()
+		}
+	}
 
 	for {
 		if !s.isStart {
@@ -326,6 +307,8 @@ func (s *Stream) TransStart() {
 
 		if s.IsSendStaticPush() {
 			s.SendStaticPush(p)
+		} else if s.IsSubSendStaticPush() {
+			s.SendSubStaticPush(p)
 		}
 
 		s.cache.Write(p)
@@ -389,6 +372,7 @@ func (s *Stream) CheckAlive() (n int) {
 func (s *Stream) closeInter() {
 	if s.r != nil {
 		s.StopStaticPush()
+		s.StopSubStaticPush()
 		log.Printf("[%v] publisher closed", s.r.Info())
 	}
 

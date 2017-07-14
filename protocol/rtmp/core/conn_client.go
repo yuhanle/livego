@@ -30,19 +30,26 @@ var (
 )
 
 type ConnClient struct {
-	done       bool
-	transID    int
-	url        string
-	tcurl      string
-	app        string
-	title      string
-	query      string
-	curcmdName string
-	streamid   uint32
-	conn       *Conn
-	encoder    *amf.Encoder
-	decoder    *amf.Decoder
-	bytesw     *bytes.Buffer
+	done          bool
+	transID       int
+	url           string
+	tcurl         string
+	app           string
+	title         string
+	query         string
+	curcmdName    string
+	streamid      uint32
+	suburl        [2]string
+	subtcurl      [2]string
+	subapp        [2]string
+	subtitle      [2]string
+	subquery      [2]string
+	subcurcmdName [2]string
+	substreamid   [2]uint32
+	conn          *Conn
+	encoder       *amf.Encoder
+	decoder       *amf.Decoder
+	bytesw        *bytes.Buffer
 }
 
 func NewConnClient() *ConnClient {
@@ -100,6 +107,7 @@ func (connClient *ConnClient) readRespMsg() error {
 							}
 						} else if k == 3 {
 							connClient.streamid = uint32(id)
+							log.Printf("connClient.streamid=%d", connClient.streamid)
 						}
 					case cmdPublish:
 						if int(v.(float64)) != 0 {
@@ -126,6 +134,72 @@ func (connClient *ConnClient) readRespMsg() error {
 			return nil
 		}
 	}
+}
+
+func (connClient *ConnClient) writeSubMsg(index int, args ...interface{}) error {
+	connClient.bytesw.Reset()
+	for _, v := range args {
+		if _, err := connClient.encoder.Encode(connClient.bytesw, v, amf.AMF0); err != nil {
+			return err
+		}
+	}
+	msg := connClient.bytesw.Bytes()
+	c := ChunkStream{
+		Format:    0,
+		CSID:      3,
+		Timestamp: 0,
+		TypeID:    20,
+		StreamID:  connClient.substreamid[index],
+		Length:    uint32(len(msg)),
+		Data:      msg,
+	}
+	connClient.conn.Write(&c)
+	return connClient.conn.Flush()
+}
+
+func (connClient *ConnClient) WriteTimestampMeta(timestamp uint32) error {
+	log.Printf("WriteTimestampMeta timestamp=%d", timestamp)
+	err := connClient.writeMetaDataMsg(connClient.streamid, "syncTimebase", timestamp)
+	if err != nil {
+		log.Printf("WriteTimestampMeta error=%v", err)
+	}
+
+	return err
+}
+
+func (connClient *ConnClient) WriteSubTimestampMeta(index int, timestamp uint32) error {
+	if index >= len(connClient.substreamid) {
+		log.Printf("WriteSubTimestampMeta: index(%d) is wrong", index)
+		return errors.New(fmt.Sprintf("WriteSubTimestampMeta: index(%d) is wrong", index))
+	}
+	log.Printf("WriteSubTimestampMeta index=%d, timestamp=%d", index, timestamp)
+	err := connClient.writeMetaDataMsg(connClient.substreamid[index], "syncTimebase", timestamp)
+	if err != nil {
+		log.Printf("WriteSubTimestampMeta index=%d, error=%v", index, err)
+	}
+
+	return err
+}
+
+func (connClient *ConnClient) writeMetaDataMsg(streamid uint32, args ...interface{}) error {
+	connClient.bytesw.Reset()
+	for _, v := range args {
+		if _, err := connClient.encoder.Encode(connClient.bytesw, v, amf.AMF0); err != nil {
+			return err
+		}
+	}
+	msg := connClient.bytesw.Bytes()
+	c := ChunkStream{
+		Format:    0,
+		CSID:      3,
+		Timestamp: 0,
+		TypeID:    18,
+		StreamID:  streamid,
+		Length:    uint32(len(msg)),
+		Data:      msg,
+	}
+	connClient.conn.Write(&c)
+	return connClient.conn.Flush()
 }
 
 func (connClient *ConnClient) writeMsg(args ...interface{}) error {
@@ -164,6 +238,99 @@ func (connClient *ConnClient) writeConnectMsg() error {
 	return connClient.readRespMsg()
 }
 
+func (connClient *ConnClient) writeCreateSubStreamMsg(index int) error {
+	connClient.transID++
+	connClient.curcmdName = cmdCreateStream
+
+	log.Printf("writeCreateSubStreamMsg: index=%d, connClient.transID=%d", index, connClient.transID)
+	if err := connClient.writeSubMsg(index, cmdCreateStream, connClient.transID, nil); err != nil {
+		return err
+	}
+
+	for {
+		err := connClient.readSubRespMsg(index)
+		if err == nil {
+			return err
+		}
+
+		if err == ErrFail {
+			log.Println("writeCreateSubStreamMsg readRespMsg err=%v", err)
+			return err
+		}
+	}
+
+}
+
+func (connClient *ConnClient) readSubRespMsg(index int) error {
+	var err error
+	var rc ChunkStream
+	for {
+		if err = connClient.conn.Read(&rc); err != nil {
+			return err
+		}
+		if err != nil && err != io.EOF {
+			return err
+		}
+		switch rc.TypeID {
+		case 20, 17:
+			r := bytes.NewReader(rc.Data)
+			vs, _ := connClient.decoder.DecodeBatch(r, amf.AMF0)
+
+			log.Printf("readSubRespMsg: vs=%v", vs)
+			for k, v := range vs {
+				switch v.(type) {
+				case string:
+					switch connClient.curcmdName {
+					case cmdConnect, cmdCreateStream:
+						if v.(string) != respResult {
+							return errors.New(v.(string))
+						}
+
+					case cmdPublish:
+						if v.(string) != onStatus {
+							return ErrFail
+						}
+					}
+				case float64:
+					switch connClient.curcmdName {
+					case cmdConnect, cmdCreateStream:
+						id := int(v.(float64))
+
+						if k == 1 {
+							if id != connClient.transID {
+								return ErrFail
+							}
+						} else if k == 3 {
+							connClient.substreamid[index] = uint32(id)
+							log.Printf("connClient.substreamid[%d]=%d", index, connClient.substreamid[index])
+						}
+					case cmdPublish:
+						if int(v.(float64)) != 0 {
+							return ErrFail
+						}
+					}
+				case amf.Object:
+					objmap := v.(amf.Object)
+					switch connClient.curcmdName {
+					case cmdConnect:
+						code, ok := objmap["code"]
+						if ok && code.(string) != connectSuccess {
+							return ErrFail
+						}
+					case cmdPublish:
+						code, ok := objmap["code"]
+						if ok && code.(string) != publishStart {
+							return ErrFail
+						}
+					}
+				}
+			}
+
+			return nil
+		}
+	}
+}
+
 func (connClient *ConnClient) writeCreateStreamMsg() error {
 	connClient.transID++
 	connClient.curcmdName = cmdCreateStream
@@ -187,6 +354,17 @@ func (connClient *ConnClient) writeCreateStreamMsg() error {
 
 }
 
+func (connClient *ConnClient) writeSubPublishMsg(index int) error {
+	connClient.transID++
+	connClient.curcmdName = cmdPublish
+	log.Printf("writeSubPublishMsg: index=%d, substreamid=%d, transID=%d, title=%s",
+		index, connClient.substreamid[index], connClient.transID, connClient.subtitle[index])
+	if err := connClient.writeSubMsg(index, cmdPublish, connClient.transID, nil, connClient.subtitle[index], publishLive); err != nil {
+		return err
+	}
+	return connClient.readSubRespMsg(index)
+}
+
 func (connClient *ConnClient) writePublishMsg() error {
 	connClient.transID++
 	connClient.curcmdName = cmdPublish
@@ -206,6 +384,48 @@ func (connClient *ConnClient) writePlayMsg() error {
 		return err
 	}
 	return connClient.readRespMsg()
+}
+
+func (connClient *ConnClient) StartSubStream(url string, index int, method string) error {
+	if connClient.conn == nil {
+		return errors.New("the master stream is not connected")
+	}
+
+	if index > 1 {
+		errString := fmt.Sprintf("the substream index(%d) error", index)
+		return errors.New(errString)
+	}
+
+	u, err := neturl.Parse(url)
+	if err != nil {
+		return err
+	}
+	connClient.suburl[index] = url
+	path := strings.TrimLeft(u.Path, "/")
+	ps := strings.SplitN(path, "/", 2)
+	if len(ps) != 2 {
+		return fmt.Errorf("u path err: %s", path)
+	}
+	connClient.subapp[index] = ps[0]
+	connClient.subtitle[index] = ps[1]
+	connClient.subquery[index] = u.RawQuery
+	connClient.subtcurl[index] = "rtmp://" + u.Host + "/" + connClient.subapp[index]
+
+	log.Printf("writeCreateSubStreamMsg:index=%d, url=%s, subapp=%s, subtitle=%s, subquery=%s, subtcurl=%s",
+		index, url, connClient.subapp[index], connClient.subtitle[index], connClient.subquery[index], connClient.subtcurl[index])
+	if err := connClient.writeCreateSubStreamMsg(index); err != nil {
+		log.Println("writeCreateStreamMsg error", err)
+		return err
+	}
+
+	log.Printf("subindex(%d) method control:%s, %s, %s", index, method, av.PUBLISH, av.PLAY)
+	if method == av.PUBLISH {
+		if err := connClient.writeSubPublishMsg(index); err != nil {
+			log.Printf("subindex(%d) writeSubPublishMsg error=%v", index, err)
+			return err
+		}
+	}
+	return nil
 }
 
 func (connClient *ConnClient) Start(url string, method string) error {
@@ -320,6 +540,10 @@ func (connClient *ConnClient) GetInfo() (app string, name string, url string) {
 
 func (connClient *ConnClient) GetStreamId() uint32 {
 	return connClient.streamid
+}
+
+func (connClient *ConnClient) GetSubStreamId(index int) uint32 {
+	return connClient.substreamid[index]
 }
 
 func (connClient *ConnClient) Close(err error) {

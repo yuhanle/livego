@@ -58,13 +58,14 @@ var (
 
 // Header can be converted to AudioHeaderInfo or VideoHeaderInfo
 type Packet struct {
-	IsAudio    bool
-	IsVideo    bool
-	IsMetadata bool
-	TimeStamp  uint32 // dts
-	StreamID   uint32
-	Header     PacketHeader
-	Data       []byte
+	IsAudio     bool
+	IsVideo     bool
+	IsMetadata  bool
+	TimeStamp   uint32 // dts
+	StreamID    uint32
+	StreamIndex uint32
+	Header      PacketHeader
+	Data        []byte
 }
 
 type PacketHeader interface {
