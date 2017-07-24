@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/livego/av"
 	"github.com/livego/configure"
+	log "github.com/livego/logging"
 	"github.com/livego/protocol/rtmp/core"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -61,7 +61,7 @@ func GetIndexbySuburl(subrtmpurl string) int {
 	numString := argString[foundIndex-1 : foundIndex]
 	retIndex, err := strconv.Atoi(numString)
 	if err != nil {
-		log.Printf("atoi:%v", err)
+		log.Errorf("atoi:%v", err)
 		retIndex = -1
 	}
 
@@ -102,7 +102,7 @@ func GetStaticPushObjectbySubstream(subrtmpurl string) (int, *StaticPush) {
 func GetAndCreateStaticPushObject(rtmpurl string) *StaticPush {
 	g_MapLock.RLock()
 	staticpush, ok := G_StaticPushMap[rtmpurl]
-	log.Printf("GetAndCreateStaticPushObject: %s, return %v", rtmpurl, ok)
+	log.Infof("GetAndCreateStaticPushObject: %s, return %v", rtmpurl, ok)
 	if !ok {
 		g_MapLock.RUnlock()
 		newStaticpush := NewStaticPush(rtmpurl)
@@ -134,13 +134,13 @@ func ReleaseStaticPushObject(rtmpurl string) {
 	if _, ok := G_StaticPushMap[rtmpurl]; ok {
 		g_MapLock.RUnlock()
 
-		log.Printf("ReleaseStaticPushObject %s ok", rtmpurl)
+		log.Infof("ReleaseStaticPushObject %s ok", rtmpurl)
 		g_MapLock.Lock()
 		delete(G_StaticPushMap, rtmpurl)
 		g_MapLock.Unlock()
 	} else {
 		g_MapLock.RUnlock()
-		log.Printf("ReleaseStaticPushObject: not find %s", rtmpurl)
+		log.Errorf("ReleaseStaticPushObject: not find %s", rtmpurl)
 	}
 }
 
@@ -164,25 +164,14 @@ func (self *StaticPush) Start() error {
 
 	self.connectClient = core.NewConnClient()
 
-	log.Printf("static publish server addr:%v starting....", self.RtmpUrl)
+	log.Infof("static publish server addr:%v starting....", self.RtmpUrl)
 	err := self.connectClient.Start(self.RtmpUrl, "publish")
 	if err != nil {
-		log.Printf("connectClient.Start url=%v error", self.RtmpUrl)
+		log.Errorf("connectClient.Start url=%v error", self.RtmpUrl)
 		return err
 	}
-	log.Printf("static publish server addr:%v started, streamid=%d", self.RtmpUrl, self.connectClient.GetStreamId())
+	log.Infof("static publish server addr:%v started, streamid=%d", self.RtmpUrl, self.connectClient.GetStreamId())
 
-	/*
-		log.Printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-		tempUrl := "rtmp://inke.8686c.com/live/inke_1"
-		index := 0
-		err = self.connectClient.StartSubStream(tempUrl, index, "publish")
-		if err != nil {
-			log.Printf("connectClient.StartSubStream index=%d url=%v error=%v", index, tempUrl, err)
-			return err
-		}
-		log.Printf("static publish server addr:%v started, index=%d, streamid=%d", tempUrl, index, self.connectClient.GetSubStreamId(index))
-	*/
 	go self.HandleAvPacket()
 
 	self.startflag = true
@@ -191,10 +180,11 @@ func (self *StaticPush) Start() error {
 
 func (self *StaticPush) StartSubUrl(subrtmpurl string) error {
 	if !self.startflag {
-		log.Printf("Master StaticPush has not started %s", self.RtmpUrl)
+		log.Errorf("Master StaticPush has not started %s", self.RtmpUrl)
 		return errors.New(fmt.Sprintf("Master StaticPush has not started %s", self.RtmpUrl))
 	}
 
+	log.Infof("StartSubUrl: subrtmpurl=%s, RtmpSubUrls=%v", subrtmpurl, self.RtmpSubUrls)
 	saveIndex := -1
 	for index, rtmpurlString := range self.RtmpSubUrls {
 		if rtmpurlString == "" {
@@ -208,11 +198,12 @@ func (self *StaticPush) StartSubUrl(subrtmpurl string) error {
 
 	err := self.connectClient.StartSubStream(subrtmpurl, saveIndex, "publish")
 	if err != nil {
-		log.Printf("connectClient.StartSubStream index=%d url=%v error=%v", saveIndex, subrtmpurl, err)
+		log.Errorf("connectClient.StartSubStream index=%d url=%v error=%v", saveIndex, subrtmpurl, err)
 		return err
 	}
 	self.RtmpSubUrls[saveIndex] = subrtmpurl
-	log.Printf("StartSubUrl:%v started, index=%d, streamid=%d", subrtmpurl, saveIndex, self.connectClient.GetSubStreamId(saveIndex))
+	log.Infof("StartSubUrl:%v started, index=%d, streamid=%d, RtmpSubUrls=%v",
+		subrtmpurl, saveIndex, self.connectClient.GetSubStreamId(saveIndex), self.RtmpSubUrls)
 	return nil
 }
 
@@ -221,7 +212,7 @@ func (self *StaticPush) Stop() {
 		return
 	}
 
-	log.Printf("StaticPush Stop: %s", self.RtmpUrl)
+	log.Infof("StaticPush Stop: %s", self.RtmpUrl)
 	self.sndctrl_chan <- STATIC_RELAY_STOP_CTRL
 	self.startflag = false
 }
@@ -236,9 +227,10 @@ func (self *StaticPush) StopSubUrl(subrtmpurl string) {
 	}
 
 	if saveIndex != -1 {
-		log.Printf("StopSubUrl: %s", self.RtmpSubUrls[saveIndex])
+		log.Infof("StopSubUrl: %s", self.RtmpSubUrls[saveIndex])
 		self.RtmpSubUrls[saveIndex] = ""
 	}
+	log.Infof("StopSubUrl: count=%d, RtmpSubUrls=%v", len(self.RtmpSubUrls), self.RtmpSubUrls)
 }
 
 func (self *StaticPush) WriteAvPacket(packet *av.Packet) {
@@ -266,9 +258,13 @@ func (self *StaticPush) sendSyncTimestamp(p *av.Packet) {
 		//for I frame or timeout
 		if (packet[0] == 0x17 && packet[1] == 0x00) || (packet[0] == 0x17 && packet[1] == 0x01) {
 			if p.StreamIndex > 0 {
+				log.Infof("substream(%d) url=%s, timestamp=%d",
+					p.StreamIndex, self.RtmpSubUrls[p.StreamIndex-1], p.TimeStamp)
 				self.lastSubIFrameTimestamp[p.StreamIndex-1] = p.TimeStamp
 				self.connectClient.WriteSubTimestampMeta(int(p.StreamIndex-1), p.TimeStamp)
 			} else {
+				log.Infof("mainstream url=%s, timestamp=%d",
+					self.RtmpUrl, p.TimeStamp)
 				self.lastIFrameTimestamp = p.TimeStamp
 				self.connectClient.WriteTimestampMeta(p.TimeStamp)
 			}
@@ -318,30 +314,11 @@ func (self *StaticPush) sendPacket(p *av.Packet) {
 	}
 
 	self.connectClient.Write(cs)
-	/*
-		var csSub core.ChunkStream
-		csSub.Data = p.Data
-		csSub.Length = uint32(len(p.Data))
-		csSub.StreamID = self.connectClient.GetSubStreamId(0)
-		csSub.Timestamp = p.TimeStamp
-
-		if p.IsVideo {
-			csSub.TypeID = av.TAG_VIDEO
-		} else {
-			if p.IsMetadata {
-				csSub.TypeID = av.TAG_SCRIPTDATAAMF0
-			} else {
-				csSub.TypeID = av.TAG_AUDIO
-			}
-		}
-
-		self.connectClient.Write(csSub)
-	*/
 }
 
 func (self *StaticPush) HandleAvPacket() {
 	if !self.IsStart() {
-		log.Printf("static push %s not started", self.RtmpUrl)
+		log.Errorf("static push %s not started", self.RtmpUrl)
 		return
 	}
 
@@ -352,7 +329,7 @@ func (self *StaticPush) HandleAvPacket() {
 		case ctrlcmd := <-self.sndctrl_chan:
 			if ctrlcmd == STATIC_RELAY_STOP_CTRL {
 				self.connectClient.Close(nil)
-				log.Printf("Static HandleAvPacket close: publishurl=%s", self.RtmpUrl)
+				log.Infof("Static HandleAvPacket close: publishurl=%s", self.RtmpUrl)
 				break
 			}
 		}

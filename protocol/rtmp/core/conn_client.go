@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/livego/av"
+	log "github.com/livego/logging"
 	"github.com/livego/protocol/amf"
-	"log"
 )
 
 var (
@@ -81,7 +81,7 @@ func (connClient *ConnClient) readRespMsg() error {
 			r := bytes.NewReader(rc.Data)
 			vs, _ := connClient.decoder.DecodeBatch(r, amf.AMF0)
 
-			log.Printf("readRespMsg: vs=%v", vs)
+			log.Infof("readRespMsg: vs=%v", vs)
 			for k, v := range vs {
 				switch v.(type) {
 				case string:
@@ -107,7 +107,7 @@ func (connClient *ConnClient) readRespMsg() error {
 							}
 						} else if k == 3 {
 							connClient.streamid = uint32(id)
-							log.Printf("connClient.streamid=%d", connClient.streamid)
+							log.Infof("connClient.streamid=%d", connClient.streamid)
 						}
 					case cmdPublish:
 						if int(v.(float64)) != 0 {
@@ -158,10 +158,10 @@ func (connClient *ConnClient) writeSubMsg(index int, args ...interface{}) error 
 }
 
 func (connClient *ConnClient) WriteTimestampMeta(timestamp uint32) error {
-	log.Printf("WriteTimestampMeta timestamp=%d", timestamp)
+	//log.Printf("WriteTimestampMeta timestamp=%d", timestamp)
 	err := connClient.writeMetaDataMsg(connClient.streamid, "syncTimebase", timestamp)
 	if err != nil {
-		log.Printf("WriteTimestampMeta error=%v", err)
+		log.Errorf("WriteTimestampMeta error=%v", err)
 	}
 
 	return err
@@ -169,13 +169,13 @@ func (connClient *ConnClient) WriteTimestampMeta(timestamp uint32) error {
 
 func (connClient *ConnClient) WriteSubTimestampMeta(index int, timestamp uint32) error {
 	if index >= len(connClient.substreamid) {
-		log.Printf("WriteSubTimestampMeta: index(%d) is wrong", index)
+		log.Errorf("WriteSubTimestampMeta: index(%d) is wrong", index)
 		return errors.New(fmt.Sprintf("WriteSubTimestampMeta: index(%d) is wrong", index))
 	}
-	log.Printf("WriteSubTimestampMeta index=%d, timestamp=%d", index, timestamp)
+	//log.Printf("WriteSubTimestampMeta index=%d, timestamp=%d", index, timestamp)
 	err := connClient.writeMetaDataMsg(connClient.substreamid[index], "syncTimebase", timestamp)
 	if err != nil {
-		log.Printf("WriteSubTimestampMeta index=%d, error=%v", index, err)
+		log.Errorf("WriteSubTimestampMeta index=%d, error=%v", index, err)
 	}
 
 	return err
@@ -231,7 +231,7 @@ func (connClient *ConnClient) writeConnectMsg() error {
 	event["tcUrl"] = connClient.tcurl
 	connClient.curcmdName = cmdConnect
 
-	log.Printf("writeConnectMsg: connClient.transID=%d, event=%v", connClient.transID, event)
+	log.Infof("writeConnectMsg: connClient.transID=%d, event=%v", connClient.transID, event)
 	if err := connClient.writeMsg(cmdConnect, connClient.transID, event); err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (connClient *ConnClient) writeCreateSubStreamMsg(index int) error {
 	connClient.transID++
 	connClient.curcmdName = cmdCreateStream
 
-	log.Printf("writeCreateSubStreamMsg: index=%d, connClient.transID=%d", index, connClient.transID)
+	log.Infof("writeCreateSubStreamMsg: index=%d, connClient.transID=%d", index, connClient.transID)
 	if err := connClient.writeSubMsg(index, cmdCreateStream, connClient.transID, nil); err != nil {
 		return err
 	}
@@ -254,7 +254,7 @@ func (connClient *ConnClient) writeCreateSubStreamMsg(index int) error {
 		}
 
 		if err == ErrFail {
-			log.Println("writeCreateSubStreamMsg readRespMsg err=%v", err)
+			log.Errorf("writeCreateSubStreamMsg readRespMsg err=%v", err)
 			return err
 		}
 	}
@@ -276,7 +276,7 @@ func (connClient *ConnClient) readSubRespMsg(index int) error {
 			r := bytes.NewReader(rc.Data)
 			vs, _ := connClient.decoder.DecodeBatch(r, amf.AMF0)
 
-			log.Printf("readSubRespMsg: vs=%v", vs)
+			log.Infof("readSubRespMsg: vs=%v", vs)
 			for k, v := range vs {
 				switch v.(type) {
 				case string:
@@ -302,7 +302,7 @@ func (connClient *ConnClient) readSubRespMsg(index int) error {
 							}
 						} else if k == 3 {
 							connClient.substreamid[index] = uint32(id)
-							log.Printf("connClient.substreamid[%d]=%d", index, connClient.substreamid[index])
+							log.Infof("connClient.substreamid[%d]=%d", index, connClient.substreamid[index])
 						}
 					case cmdPublish:
 						if int(v.(float64)) != 0 {
@@ -335,7 +335,7 @@ func (connClient *ConnClient) writeCreateStreamMsg() error {
 	connClient.transID++
 	connClient.curcmdName = cmdCreateStream
 
-	log.Printf("writeCreateStreamMsg: connClient.transID=%d", connClient.transID)
+	log.Infof("writeCreateStreamMsg: connClient.transID=%d", connClient.transID)
 	if err := connClient.writeMsg(cmdCreateStream, connClient.transID, nil); err != nil {
 		return err
 	}
@@ -347,7 +347,7 @@ func (connClient *ConnClient) writeCreateStreamMsg() error {
 		}
 
 		if err == ErrFail {
-			log.Println("writeCreateStreamMsg readRespMsg err=%v", err)
+			log.Errorf("writeCreateStreamMsg readRespMsg err=%v", err)
 			return err
 		}
 	}
@@ -357,7 +357,7 @@ func (connClient *ConnClient) writeCreateStreamMsg() error {
 func (connClient *ConnClient) writeSubPublishMsg(index int) error {
 	connClient.transID++
 	connClient.curcmdName = cmdPublish
-	log.Printf("writeSubPublishMsg: index=%d, substreamid=%d, transID=%d, title=%s",
+	log.Infof("writeSubPublishMsg: index=%d, substreamid=%d, transID=%d, title=%s",
 		index, connClient.substreamid[index], connClient.transID, connClient.subtitle[index])
 	if err := connClient.writeSubMsg(index, cmdPublish, connClient.transID, nil, connClient.subtitle[index], publishLive); err != nil {
 		return err
@@ -377,7 +377,7 @@ func (connClient *ConnClient) writePublishMsg() error {
 func (connClient *ConnClient) writePlayMsg() error {
 	connClient.transID++
 	connClient.curcmdName = cmdPlay
-	log.Printf("writePlayMsg: connClient.transID=%d, cmdPlay=%v, connClient.title=%v",
+	log.Infof("writePlayMsg: connClient.transID=%d, cmdPlay=%v, connClient.title=%v",
 		connClient.transID, cmdPlay, connClient.title)
 
 	if err := connClient.writeMsg(cmdPlay, 0, nil, connClient.title); err != nil {
@@ -411,17 +411,17 @@ func (connClient *ConnClient) StartSubStream(url string, index int, method strin
 	connClient.subquery[index] = u.RawQuery
 	connClient.subtcurl[index] = "rtmp://" + u.Host + "/" + connClient.subapp[index]
 
-	log.Printf("writeCreateSubStreamMsg:index=%d, url=%s, subapp=%s, subtitle=%s, subquery=%s, subtcurl=%s",
+	log.Infof("StartSubStream:index=%d, url=%s, subapp=%s, subtitle=%s, subquery=%s, subtcurl=%s",
 		index, url, connClient.subapp[index], connClient.subtitle[index], connClient.subquery[index], connClient.subtcurl[index])
 	if err := connClient.writeCreateSubStreamMsg(index); err != nil {
-		log.Println("writeCreateStreamMsg error", err)
+		log.Errorf("writeCreateStreamMsg error", err)
 		return err
 	}
 
-	log.Printf("subindex(%d) method control:%s, %s, %s", index, method, av.PUBLISH, av.PLAY)
+	log.Infof("StartSubStream:subindex(%d) method control:%s, %s, %s", index, method, av.PUBLISH, av.PLAY)
 	if method == av.PUBLISH {
 		if err := connClient.writeSubPublishMsg(index); err != nil {
-			log.Printf("subindex(%d) writeSubPublishMsg error=%v", index, err)
+			log.Errorf("StartSubStream: subindex(%d) writeSubPublishMsg error=%v", index, err)
 			return err
 		}
 	}
@@ -455,9 +455,9 @@ func (connClient *ConnClient) Start(url string, method string) error {
 		port = ":" + port
 	}
 	ips, err := net.LookupIP(host)
-	log.Printf("ips: %v, host: %v", ips, host)
+	log.Infof("ips: %v, host: %v", ips, host)
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		return err
 	}
 	remoteIP = ips[rand.Intn(len(ips))].String()
@@ -467,41 +467,41 @@ func (connClient *ConnClient) Start(url string, method string) error {
 
 	local, err := net.ResolveTCPAddr("tcp", localIP)
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		return err
 	}
-	log.Println("remoteIP: ", remoteIP)
+	log.Info("remoteIP: ", remoteIP)
 	remote, err := net.ResolveTCPAddr("tcp", remoteIP)
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		return err
 	}
 	conn, err := net.DialTCP("tcp", local, remote)
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		return err
 	}
 
-	log.Println("connection:", "local:", conn.LocalAddr(), "remote:", conn.RemoteAddr())
+	log.Info("connection:", "local:", conn.LocalAddr(), "remote:", conn.RemoteAddr())
 
 	connClient.conn = NewConn(conn, 4*1024)
 
-	log.Println("HandshakeClient....")
+	log.Info("HandshakeClient....")
 	if err := connClient.conn.HandshakeClient(); err != nil {
 		return err
 	}
 
-	log.Println("writeConnectMsg....")
+	log.Info("writeConnectMsg....")
 	if err := connClient.writeConnectMsg(); err != nil {
 		return err
 	}
-	log.Println("writeCreateStreamMsg....")
+	log.Info("writeCreateStreamMsg....")
 	if err := connClient.writeCreateStreamMsg(); err != nil {
-		log.Println("writeCreateStreamMsg error", err)
+		log.Error("writeCreateStreamMsg error", err)
 		return err
 	}
 
-	log.Println("method control:", method, av.PUBLISH, av.PLAY)
+	log.Info("method control:", method, av.PUBLISH, av.PLAY)
 	if method == av.PUBLISH {
 		if err := connClient.writePublishMsg(); err != nil {
 			return err

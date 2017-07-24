@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/livego/av"
+	log "github.com/livego/logging"
 	"github.com/livego/protocol/amf"
 	"github.com/livego/utils/pio"
 	"github.com/livego/utils/uid"
-	"log"
 	"net/http"
 	"time"
 )
@@ -47,7 +47,7 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 	go func() {
 		err := ret.SendPacket()
 		if err != nil {
-			log.Println("SendPacket error:", err)
+			log.Error("SendPacket error:", err)
 			ret.closed = true
 		}
 	}()
@@ -55,14 +55,14 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 }
 
 func (flvWriter *FLVWriter) DropPacket(pktQue chan *av.Packet, info av.Info) {
-	log.Printf("[%v] packet queue max!!!", info)
+	log.Info("[%v] packet queue max!!!", info)
 	for i := 0; i < maxQueueNum-84; i++ {
 		tmpPkt, ok := <-pktQue
 		if ok && tmpPkt.IsVideo {
 			videoPkt, ok := tmpPkt.Header.(av.VideoPacketHeader)
 			// dont't drop sps config and dont't drop key frame
 			if ok && (videoPkt.IsSeq() || videoPkt.IsKeyFrame()) {
-				log.Println("insert keyframe to queue")
+				log.Info("insert keyframe to queue")
 				pktQue <- tmpPkt
 			}
 
@@ -74,11 +74,11 @@ func (flvWriter *FLVWriter) DropPacket(pktQue chan *av.Packet, info av.Info) {
 		}
 		// try to don't drop audio
 		if ok && tmpPkt.IsAudio {
-			log.Println("insert audio to queue")
+			log.Info("insert audio to queue")
 			pktQue <- tmpPkt
 		}
 	}
-	log.Println("packet queue len: ", len(pktQue))
+	log.Info("packet queue len: ", len(pktQue))
 }
 
 func (flvWriter *FLVWriter) Write(p *av.Packet) (err error) {
@@ -164,7 +164,7 @@ func (flvWriter *FLVWriter) Wait() {
 }
 
 func (flvWriter *FLVWriter) Close(error) {
-	log.Println("http flv closed")
+	log.Info("http flv closed")
 	if !flvWriter.closed {
 		close(flvWriter.packetQueue)
 		close(flvWriter.closedChan)

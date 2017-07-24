@@ -3,10 +3,10 @@ package flv
 import (
 	"flag"
 	"github.com/livego/av"
+	log "github.com/livego/logging"
 	"github.com/livego/protocol/amf"
 	"github.com/livego/utils/pio"
 	"github.com/livego/utils/uid"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -21,13 +21,13 @@ func NewFlv(handler av.Handler, info av.Info) {
 	patths := strings.SplitN(info.Key, "/", 2)
 
 	if len(patths) != 2 {
-		log.Println("invalid info")
+		log.Error("invalid info")
 		return
 	}
 
 	w, err := os.OpenFile(*flvFile, os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
-		log.Println("open file error: ", err)
+		log.Error("open file error: ", err)
 	}
 
 	writer := NewFLVWriter(patths[0], patths[1], info.URL, w)
@@ -36,7 +36,7 @@ func NewFlv(handler av.Handler, info av.Info) {
 
 	writer.Wait()
 	// close flv file
-	log.Println("close flv file")
+	log.Error("close flv file")
 	writer.ctx.Close()
 }
 
@@ -45,7 +45,7 @@ const (
 )
 
 type FLVWriter struct {
-	Uid             string
+	Uid string
 	av.RWBaser
 	app, title, url string
 	buf             []byte

@@ -3,7 +3,7 @@ package httpflvclient
 import (
 	"errors"
 	"fmt"
-	"log"
+	log "github.com/livego/logging"
 	"net"
 	"os"
 	"strconv"
@@ -11,11 +11,12 @@ import (
 )
 
 type HttpFlvClient struct {
-	Url       string
-	HostUrl   string
-	HostPort  int
-	PathUrl   string
-	rcvHandle FlvRcvCallback
+	Url         string
+	HostUrl     string
+	HostPort    int
+	PathUrl     string
+	rcvHandle   FlvRcvCallback
+	IsStartFlag bool
 }
 
 type FlvRcvCallback interface {
@@ -25,14 +26,14 @@ type FlvRcvCallback interface {
 //http://pull2.a8.com/live/1499323853715657.flv
 func NewHttpFlvClient(url string) *HttpFlvClient {
 
-	log.Printf("Http flv client %s", url)
+	log.Infof("Http flv client %s", url)
 	if len(url) <= 6 {
-		log.Printf("url(%s) length(%d) is error", url, len(url))
+		log.Errorf("url(%s) length(%d) is error", url, len(url))
 		return nil
 	}
 
 	if url[:7] != "http://" {
-		log.Printf("url(%s) header(%s) is error", url, url[:7])
+		log.Errorf("url(%s) header(%s) is error", url, url[:7])
 		return nil
 	}
 	tempString := url[7:]
@@ -42,7 +43,7 @@ func NewHttpFlvClient(url string) *HttpFlvClient {
 	hostUrl := pathArray[0]
 
 	hostInfoArray := strings.Split(hostUrl, ":")
-	log.Printf("host info array=%v", hostInfoArray)
+	log.Infof("host info array=%v", hostInfoArray)
 
 	var hostPort int
 	if len(hostInfoArray) == 1 {
@@ -52,11 +53,11 @@ func NewHttpFlvClient(url string) *HttpFlvClient {
 		var err error
 		hostPort, err = strconv.Atoi(hostportString)
 		if err != nil {
-			log.Printf("host port(%s) error=%v", hostportString, err)
+			log.Errorf("host port(%s) error=%v", hostportString, err)
 			return nil
 		}
 	}
-	log.Printf("host url=%s, hostport=%d", hostUrl, hostPort)
+	log.Infof("host url=%s, hostport=%d", hostUrl, hostPort)
 
 	var pathString string
 	for _, pachUrl := range pathArray[1:] {
@@ -65,7 +66,7 @@ func NewHttpFlvClient(url string) *HttpFlvClient {
 
 	//pathString = pathString[0:(len(pathString) - 1)]
 
-	log.Printf("pathurl=%s", pathString)
+	log.Infof("pathurl=%s", pathString)
 
 	return &HttpFlvClient{
 		Url:      url,
@@ -99,7 +100,7 @@ func WriteFlvFile(data []byte, length int) error {
 	if ret {
 		filehandle, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666) //打开文件
 		if err != nil {
-			log.Printf("Open file %s error=%v", filename, err)
+			log.Errorf("Open file %s error=%v", filename, err)
 			return err
 		}
 
@@ -109,7 +110,7 @@ func WriteFlvFile(data []byte, length int) error {
 	} else {
 		filehandle, err := os.Create(filename)
 		if err != nil {
-			log.Printf("Create file %s error=%v", filename, err)
+			log.Errorf("Create file %s error=%v", filename, err)
 			return err
 		}
 
@@ -122,11 +123,17 @@ func WriteFlvFile(data []byte, length int) error {
 }
 
 func (self *HttpFlvClient) Start(rcvHandle FlvRcvCallback) error {
+	if self.IsStartFlag {
+		errString := fmt.Sprintf("HttpFlvClient has already started, url=%s", self.Url)
+		log.Error(errString)
+		return errors.New(errString)
+	}
+
 	hostString := fmt.Sprintf("%s:%d", self.HostUrl, self.HostPort)
 
 	conn, err := net.Dial("tcp", hostString)
 	if err != nil {
-		log.Printf("HttpFlvClient.Start(%s) Dail error=%v", hostString, err)
+		log.Errorf("HttpFlvClient.Start(%s) Dail error=%v", hostString, err)
 		return err
 	}
 
@@ -138,7 +145,7 @@ func (self *HttpFlvClient) Start(rcvHandle FlvRcvCallback) error {
 	content = content + fmt.Sprintf("Host:%s\r\n", self.HostUrl)
 	content = content + fmt.Sprintf("Referer:http://www.abc.com/vplayer.swf\r\n\r\n")
 
-	log.Printf("send content:\r\n%s", content)
+	log.Infof("send content:\r\n%s", content)
 	conn.Write([]byte(content))
 
 	var rcvBuff []byte
@@ -147,7 +154,7 @@ func (self *HttpFlvClient) Start(rcvHandle FlvRcvCallback) error {
 		temp := make([]byte, 1)
 		retLen, err := conn.Read(temp)
 		if err != nil || retLen <= 0 {
-			log.Printf("connect read len=%d, error=%v", retLen, err)
+			log.Errorf("connect read len=%d, error=%v", retLen, err)
 			return errors.New("connect read error")
 		}
 		rcvBuff = append(rcvBuff, temp[0])
@@ -159,9 +166,10 @@ func (self *HttpFlvClient) Start(rcvHandle FlvRcvCallback) error {
 			}
 		}
 	}
-	log.Printf("rcv http header:\r\n%s", string(rcvBuff))
+	log.Infof("rcv http header:\r\n%s", string(rcvBuff))
 
 	self.rcvHandle = rcvHandle
+	self.IsStartFlag = true
 	go self.OnRcv(conn)
 
 	return nil
@@ -176,8 +184,11 @@ func (self *HttpFlvClient) OnRcv(conn net.Conn) {
 	currentState := WAIT_FLV_HEADER_STATE
 
 	needLen := FLV_HEADER_LENGTH
-	log.Printf("rcv data from %s:", self.Url)
+	log.Infof("rcv data from %s:", self.Url)
 	for {
+		if !self.IsStartFlag {
+			break
+		}
 		if currentState == WAIT_FLV_HEADER_STATE {
 			flvHeaderBuffer := make([]byte, needLen)
 
@@ -186,7 +197,7 @@ func (self *HttpFlvClient) OnRcv(conn net.Conn) {
 				rcvData := flvHeaderBuffer[startPos:]
 				retLen, err := conn.Read(rcvData)
 				if err != nil || retLen <= 0 {
-					log.Printf("connect read flv header len=%d, error=%v", retLen, err)
+					log.Errorf("connect read flv header len=%d, error=%v", retLen, err)
 					return
 				}
 				needLen -= retLen
@@ -194,7 +205,7 @@ func (self *HttpFlvClient) OnRcv(conn net.Conn) {
 					currentState = READ_RTMP_HEADER_STATE
 					needLen = RTMP_MESSAGE_HEADER_LENGTH
 
-					log.Printf("flv header: %v", flvHeaderBuffer)
+					log.Infof("flv header: %v", flvHeaderBuffer)
 					break
 				}
 			}
@@ -209,7 +220,7 @@ func (self *HttpFlvClient) OnRcv(conn net.Conn) {
 				rcvData := rtmpHeader[startPos:]
 				retLen, err := conn.Read(rcvData)
 				if err != nil || retLen <= 0 {
-					log.Printf("connect read rtmp message header len=%d, error=%v", retLen, err)
+					log.Errorf("connect read rtmp message header len=%d, error=%v", retLen, err)
 					return
 				}
 				needLen -= retLen
@@ -233,7 +244,7 @@ func (self *HttpFlvClient) OnRcv(conn net.Conn) {
 				rcvData := bodyData[startPos:]
 				retLen, err := conn.Read(rcvData)
 				if err != nil || retLen <= 0 {
-					log.Printf("connect read rtmp body len=%d, error=%v", retLen, err)
+					log.Errorf("connect read rtmp body len=%d, error=%v", retLen, err)
 					return
 				}
 				needLen -= retLen
@@ -250,11 +261,22 @@ func (self *HttpFlvClient) OnRcv(conn net.Conn) {
 		if len(rtmpHeader) > 0 && len(bodyData) > 0 {
 			rtmppacket = append(rtmppacket, rtmpHeader[4:]...)
 			rtmppacket = append(rtmppacket, bodyData[:]...)
-			self.rcvHandle.HandleFlvData(rtmppacket)
+			if self.IsStartFlag && self.rcvHandle != nil {
+				self.rcvHandle.HandleFlvData(rtmppacket)
+			}
 		}
 	}
+
+	conn.Close()
 }
 
 func (self *HttpFlvClient) Stop() {
+	if !self.IsStartFlag {
+		log.Errorf("HttpFlvClient has already stoped, url=%s", self.Url)
+		return
+	}
 
+	self.IsStartFlag = false
+	self.rcvHandle = nil
+	log.Infof("HttpFlvClient has stoped, url=%s", self.Url)
 }

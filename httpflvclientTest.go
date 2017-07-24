@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/livego/protocol/rtmp/rtmprelay"
 	"log"
+	"time"
 )
 
 /*
@@ -24,15 +25,16 @@ func main() {
 		}
 		client.Start(handle)
 	*/
-	flvurl := "http://pull99.a8.com/live/1499666817758063.flv"
-	rtmpurl := "rtmp://alpush.inke.cn/live/1499666817758063_test"
+	flvurl := "http://pull2.a8.com/live/1500359051219357.flv"
+	rtmpurl := "rtmp://127.0.0.1/live/trans/inke/mlinkm/shiwei123"
 	flvPull := rtmprelay.NewFlvPull(&flvurl, &rtmpurl)
 	err := flvPull.Start()
 	if err != nil {
 		return
 	}
 
-	defer flvPull.Stop()
+	time.Sleep(time.Second * 60)
+	flvPull.Stop()
 	done := make(chan int)
 
 	<-done

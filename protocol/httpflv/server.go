@@ -3,15 +3,16 @@ package httpflv
 import (
 	"encoding/json"
 	"github.com/livego/av"
+	log "github.com/livego/logging"
 	"github.com/livego/protocol/rtmp"
-	"log"
 	"net"
 	"net/http"
 	"strings"
 )
 
 type Server struct {
-	handler av.Handler
+	listener net.Listener
+	handler  av.Handler
 }
 
 type stream struct {
@@ -40,6 +41,10 @@ func (server *Server) Serve(l net.Listener) error {
 	})
 	http.Serve(l, mux)
 	return nil
+}
+
+func (server *Server) GetListener() net.Listener {
+	return server.listener
 }
 
 func (server *Server) getStream(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +82,7 @@ func (server *Server) getStream(w http.ResponseWriter, r *http.Request) {
 func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Println("http flv handleConn panic: ", r)
+			log.Error("http flv handleConn panic: ", r)
 		}
 	}()
 
@@ -89,7 +94,7 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimSuffix(strings.TrimLeft(u, "/"), ".flv")
 	paths := strings.SplitN(path, "/", 2)
-	log.Println("url:", u, "path:", path, "paths:", paths)
+	log.Info("url:", u, "path:", path, "paths:", paths)
 
 	if len(paths) != 2 {
 		http.Error(w, "invalid path", http.StatusBadRequest)

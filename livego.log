@@ -1,0 +1,60 @@
+2017/07/24 16:48:05 livego.go:169: [0;37m[info] start_livego, version master [0m
+2017/07/24 16:48:05 liveconfig.go:79: [0;37m[info] starting load configure file(livego.cfg)......[0m
+2017/07/24 16:48:05 liveconfig.go:86: [0;37m[info] loadconfig: 
+{
+    "listen": 1935,
+    "hls": "enable",
+    "hlsport" : 8090,
+    "httpflv" : "enable",
+    "flvport" : 8011,
+    "httpoper": "enable",
+    "operport": 8070,
+    "servers":[
+        {
+        "servername":"live",
+	    "static_push":[
+	    {"master_prefix":"publish/trans/inke/mlinkm", 
+	    "upstream":"rtmp://inke.8686c.com/live"}
+	    ],
+	    "sub_static_push":[{"master_prefix":"publish/trans/inke/mlinkm", "sub_prefix":"publish/trans/inke/mlinks"}]
+        }
+    ]
+}
+
+[0m
+2017/07/24 16:48:05 liveconfig.go:93: [0;37m[info] get config json data:{1935 enable 8090 enable 8011 enable 8070 [{live [{publish/trans/inke/mlinkm rtmp://inke.8686c.com/live}] [] [{publish/trans/inke/mlinkm publish/trans/inke/mlinks}]}]}[0m
+2017/07/24 16:48:05 livego.go:112: [0;37m[info] new flv listen... [0m
+2017/07/24 16:48:05 livego.go:73: [0;37m[info] HLS listen On :8090 [0m
+2017/07/24 16:48:05 livego.go:94: [0;37m[info] hls server enable....[0m
+2017/07/24 16:48:05 livego.go:102: [0;37m[info] RTMP Listen On :1935 [0m
+2017/07/24 16:48:05 livego.go:155: [0;37m[info] HTTP-Operation listen On :8070 [0m
+2017/07/24 16:48:05 livego.go:128: [0;37m[info] HTTP-FLV listen On :8011 [0m
+2017/07/24 16:48:10 livego.go:43: [0;37m[info] startStaticPull: pullArray=[], ret=false[0m
+2017/07/24 16:49:23 rtmp.go:96: [0;37m[info] new client, connect remote: 127.0.0.1:50350 local: 127.0.0.1:1935 [0m
+2017/07/24 16:49:23 conn_server.go:280: [0;37m[info] handle publish req done [0m
+2017/07/24 16:49:23 rtmp.go:116: [0;37m[info] handleConn: appname=live, name=stream, url=rtmp://127.0.0.1:1935/live/stream[0m
+2017/07/24 16:49:23 rtmp.go:118: [0;37m[info] handleConn: IsPublisher=true[0m
+2017/07/24 16:49:23 stream.go:46: [0;37m[info] HandleReader: info[<key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: -HpP6ZJkTHK-wUZg, Inter: false>][0m
+2017/07/24 16:49:23 stream.go:153: [0;37m[info] AddReader:<key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: -HpP6ZJkTHK-wUZg, Inter: false>[0m
+2017/07/24 16:49:23 rtmp.go:131: [0;37m[info] new publisher: <key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: -HpP6ZJkTHK-wUZg, Inter: false>[0m
+2017/07/24 16:49:23 rtmp.go:135: [0;37m[info] handleConn:writeType=*hls.Server[0m
+2017/07/24 16:49:23 hls.go:65: [0;37m[info] new hls source [0m
+2017/07/24 16:49:23 stream.go:70: [0;37m[info] HandleWriter: info[<key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: -HpP6ZJkTHK-wUZg, Inter: true>][0m
+2017/07/24 16:49:23 source.go:130: [0;37m[info] [<key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: -HpP6ZJkTHK-wUZg, Inter: true>] hls sender start[0m
+2017/07/24 16:49:23 stream.go:300: [0;37m[info] TransStart:<key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: -HpP6ZJkTHK-wUZg, Inter: false>[0m
+2017/07/24 16:49:23 stream.go:186: [0;37m[info] StartStaticPush: current url=rtmp://127.0.0.1:1935/live/stream[0m
+2017/07/24 16:49:23 stream.go:189: [0;31m[error] StartStaticPush: GetStaticPushList error=no static push url[0m
+2017/07/24 16:49:43 rtmp.go:96: [0;37m[info] new client, connect remote: 127.0.0.1:50364 local: 127.0.0.1:1935 [0m
+2017/07/24 16:49:43 conn_server.go:298: [0;37m[info] no support command= getStreamLength [0m
+2017/07/24 16:49:43 conn_server.go:290: [0;37m[info] handle play req done [0m
+2017/07/24 16:49:43 rtmp.go:116: [0;37m[info] handleConn: appname=live, name=stream, url=rtmp://127.0.0.1:1935/live/stream[0m
+2017/07/24 16:49:43 rtmp.go:118: [0;37m[info] handleConn: IsPublisher=false[0m
+2017/07/24 16:49:43 rtmp.go:141: [0;37m[info] new player: <key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: SK8mAOLnQ86B2ema, Inter: true>[0m
+2017/07/24 16:49:43 stream.go:70: [0;37m[info] HandleWriter: info[<key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: SK8mAOLnQ86B2ema, Inter: true>][0m
+2017/07/24 16:50:52 rtmp.go:341: [0;37m[info] player  <key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: SK8mAOLnQ86B2ema, Inter: true> closed: EOF [0m
+2017/07/24 16:50:52 rtmp.go:194: [0;31m[error] closed [0m
+2017/07/24 16:50:52 stream.go:356: [0;37m[info] [<key: live/stream, URL: rtmp://127.0.0.1:1935/live/stream, UID: SK8mAOLnQ86B2ema, Inter: true>] write packet error: VirWriter closed, remove[0m
+2017/07/24 16:52:14 server.go:97: [0;37m[info] url: /live/stream.flv path: live/stream paths: [live stream] [0m
+2017/07/24 16:52:14 stream.go:70: [0;37m[info] HandleWriter: info[<key: live/stream, URL: /live/stream.flv, UID: ngeJ0aNpR9C_wmaJ, Inter: true>][0m
+2017/07/24 16:54:05 writer.go:50: [0;31m[error] SendPacket error: write tcp 127.0.0.1:8011->127.0.0.1:50386: write: broken pipe [0m
+2017/07/24 16:54:05 stream.go:356: [0;37m[info] [<key: live/stream, URL: /live/stream.flv, UID: ngeJ0aNpR9C_wmaJ, Inter: true>] write packet error: flvwrite source closed, remove[0m

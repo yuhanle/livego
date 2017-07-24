@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/livego/av"
+	log "github.com/livego/logging"
 	"github.com/orcaman/concurrent-map"
-	"log"
 	"net"
 	"net/http"
 	"path"
@@ -54,11 +54,15 @@ func (server *Server) Serve(listener net.Listener) error {
 	return nil
 }
 
+func (server *Server) GetListener() net.Listener {
+	return server.listener
+}
+
 func (server *Server) GetWriter(info av.Info) av.WriteCloser {
 	var s *Source
 	ok := server.conns.Has(info.Key)
 	if !ok {
-		log.Println("new hls source")
+		log.Info("new hls source")
 		s = NewSource(info)
 		server.conns.Set(info.Key, s)
 	} else {
@@ -82,7 +86,7 @@ func (server *Server) checkStop() {
 		for item := range server.conns.IterBuffered() {
 			v := item.Val.(*Source)
 			if !v.Alive() {
-				log.Println("check stop and remove: ", v.Info())
+				log.Info("check stop and remove: ", v.Info())
 				server.conns.Remove(item.Key)
 			}
 		}
@@ -100,17 +104,19 @@ func (server *Server) handle(w http.ResponseWriter, r *http.Request) {
 		key, _ := server.parseM3u8(r.URL.Path)
 		conn := server.getConn(key)
 		if conn == nil {
+			//log.Error("m3u8 url", r.URL.Path, "key", key, "connection do not exist.")
 			http.Error(w, ErrNoPublisher.Error(), http.StatusForbidden)
 			return
 		}
 		tsCache := conn.GetCacheInc()
 		if tsCache == nil {
+			//log.Error("url", r.URL.Path, "key", key, "has no tsCache")
 			http.Error(w, ErrNoPublisher.Error(), http.StatusForbidden)
 			return
 		}
 		body, err := tsCache.GenM3U8PlayList()
 		if err != nil {
-			log.Println("GenM3U8PlayList error: ", err)
+			log.Error("GenM3U8PlayList error: ", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -124,13 +130,14 @@ func (server *Server) handle(w http.ResponseWriter, r *http.Request) {
 		key, _ := server.parseTs(r.URL.Path)
 		conn := server.getConn(key)
 		if conn == nil {
+			log.Error(".ts url", r.URL.Path, "key", key, "connection do not exist.")
 			http.Error(w, ErrNoPublisher.Error(), http.StatusForbidden)
 			return
 		}
 		tsCache := conn.GetCacheInc()
 		item, err := tsCache.GetItem(r.URL.Path)
 		if err != nil {
-			log.Println("GetItem error: ", err)
+			log.Error("GetItem error: ", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -142,19 +149,36 @@ func (server *Server) handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *Server) parseM3u8(pathstr string) (key string, err error) {
+	pathstr = strings.ToLower(pathstr)
 	pathstr = strings.TrimLeft(pathstr, "/")
-	key = strings.TrimRight(pathstr, path.Ext(pathstr))
+
+	index := strings.LastIndex(pathstr, ".m3u8")
+	if index < 0 {
+		errString := fmt.Sprintf("path(%s) has no .m3u8", pathstr)
+		return "", errors.New(errString)
+	}
+	key = pathstr[0:index]
+
 	return
 }
 
 func (server *Server) parseTs(pathstr string) (key string, err error) {
+	pathstr = strings.ToLower(pathstr)
 	pathstr = strings.TrimLeft(pathstr, "/")
-	paths := strings.SplitN(pathstr, "/", 3)
-	if len(paths) != 3 {
-		err = fmt.Errorf("invalid path=%s", pathstr)
-		return
-	}
-	key = paths[0] + "/" + paths[1]
 
+	index := strings.LastIndex(pathstr, ".ts")
+	if index < 0 {
+		errString := fmt.Sprintf("path(%s) has no .ts", pathstr)
+		return "", errors.New(errString)
+	}
+	pathstr = pathstr[0:index]
+
+	index = strings.LastIndex(pathstr, "/")
+	if index < 0 {
+		errString := fmt.Sprintf("path(%s) has no /", pathstr)
+		return "", errors.New(errString)
+	}
+
+	key = pathstr[0:index]
 	return
 }

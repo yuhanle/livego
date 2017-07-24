@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/livego/av"
+	log "github.com/livego/logging"
 	"github.com/livego/protocol/rtmp"
 	"github.com/livego/protocol/rtmp/rtmprelay"
 	"io"
-	"log"
 	"net"
 	"net/http"
 )
@@ -146,7 +146,7 @@ func (s *Server) handlePull(w http.ResponseWriter, req *http.Request) {
 	name := req.Form["name"]
 	url := req.Form["url"]
 
-	log.Printf("control pull: oper=%v, app=%v, name=%v, url=%v", oper, app, name, url)
+	log.Infof("control pull: oper=%v, app=%v, name=%v, url=%v", oper, app, name, url)
 	if (len(app) <= 0) || (len(name) <= 0) || (len(url) <= 0) {
 		io.WriteString(w, "control push parameter error, please check them.</br>")
 		return
@@ -164,16 +164,16 @@ func (s *Server) handlePull(w http.ResponseWriter, req *http.Request) {
 			io.WriteString(w, retString)
 			return
 		}
-		log.Printf("rtmprelay stop push %s from %s", remoteurl, localurl)
+		log.Infof("rtmprelay stop push %s from %s", remoteurl, localurl)
 		pullRtmprelay.Stop()
 
 		delete(s.session, keyString)
 		retString = fmt.Sprintf("<h1>push url stop %s ok</h1></br>", url[0])
 		io.WriteString(w, retString)
-		log.Printf("pull stop return %s", retString)
+		log.Infof("pull stop return %s", retString)
 	} else {
 		pullRtmprelay := rtmprelay.NewRtmpRelay(&localurl, &remoteurl)
-		log.Printf("rtmprelay start push %s from %s", remoteurl, localurl)
+		log.Infof("rtmprelay start push %s from %s", remoteurl, localurl)
 		err = pullRtmprelay.Start()
 		if err != nil {
 			retString = fmt.Sprintf("push error=%v", err)
@@ -182,7 +182,7 @@ func (s *Server) handlePull(w http.ResponseWriter, req *http.Request) {
 			retString = fmt.Sprintf("<h1>push url start %s ok</h1></br>", url[0])
 		}
 		io.WriteString(w, retString)
-		log.Printf("pull start return %s", retString)
+		log.Infof("pull start return %s", retString)
 	}
 }
 
@@ -198,7 +198,7 @@ func (s *Server) handlePush(w http.ResponseWriter, req *http.Request) {
 	name := req.Form["name"]
 	url := req.Form["url"]
 
-	log.Printf("control push: oper=%v, app=%v, name=%v, url=%v", oper, app, name, url)
+	log.Infof("control push: oper=%v, app=%v, name=%v, url=%v", oper, app, name, url)
 	if (len(app) <= 0) || (len(name) <= 0) || (len(url) <= 0) {
 		io.WriteString(w, "control push parameter error, please check them.</br>")
 		return
@@ -215,16 +215,16 @@ func (s *Server) handlePush(w http.ResponseWriter, req *http.Request) {
 			io.WriteString(w, retString)
 			return
 		}
-		log.Printf("rtmprelay stop push %s from %s", remoteurl, localurl)
+		log.Infof("rtmprelay stop push %s from %s", remoteurl, localurl)
 		pushRtmprelay.Stop()
 
 		delete(s.session, keyString)
 		retString = fmt.Sprintf("<h1>push url stop %s ok</h1></br>", url[0])
 		io.WriteString(w, retString)
-		log.Printf("push stop return %s", retString)
+		log.Infof("push stop return %s", retString)
 	} else {
 		pushRtmprelay := rtmprelay.NewRtmpRelay(&localurl, &remoteurl)
-		log.Printf("rtmprelay start push %s from %s", remoteurl, localurl)
+		log.Infof("rtmprelay start push %s from %s", remoteurl, localurl)
 		err = pushRtmprelay.Start()
 		if err != nil {
 			retString = fmt.Sprintf("push error=%v", err)
@@ -234,6 +234,6 @@ func (s *Server) handlePush(w http.ResponseWriter, req *http.Request) {
 		}
 
 		io.WriteString(w, retString)
-		log.Printf("push start return %s", retString)
+		log.Infof("push start return %s", retString)
 	}
 }
