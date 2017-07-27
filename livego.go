@@ -16,11 +16,7 @@ import (
 )
 
 var (
-	version = "master"
-	//rtmpAddr = flag.String("rtmp-addr", ":1935", "RTMP server listen address")
-	//httpFlvAddr = flag.String("httpflv-addr", ":7001", "HTTP-FLV server listen address")
-	//hlsAddr        = flag.String("hls-addr", ":7002", "HLS server listen address")
-	//operaAddr      = flag.String("manage-addr", ":8090", "HTTP manage interface server listen address")
+	version        = "v1.1"
 	configfilename = flag.String("cfgfile", "livego.cfg", "live configure filename")
 	loglevel       = flag.String("loglevel", "info", "log level")
 	logfile        = flag.String("logfile", "livego.log", "log file path")
@@ -167,7 +163,7 @@ func main() {
 			time.Sleep(1 * time.Second)
 		}
 	}()
-	log.Info("start_livego, version", version)
+	log.Info("start_livego: ", version)
 	log.Info("map hash count", cmap.SHARD_COUNT)
 	err := configure.LoadConfig(*configfilename)
 	if err != nil {
