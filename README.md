@@ -25,7 +25,7 @@ livego的rtmp配置是基于json格式，简单好用。<br/>
     "hls": "enable",<br/> 
     "servers":[<br/> 
         {<br/> 
-        "servername":"live",<br/> 
+        "servername":"live"<br/> 
         }<br/> 
     ]<br/> 
 }<br/> 
