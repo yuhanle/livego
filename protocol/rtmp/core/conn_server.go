@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/livego/av"
+	"github.com/livego/configure"
 	log "github.com/livego/logging"
 	"github.com/livego/protocol/amf"
 )
@@ -147,7 +148,7 @@ func (connServer *ConnServer) connectResp(cur *ChunkStream) error {
 	connServer.conn.Write(&c)
 	c = connServer.conn.NewSetPeerBandwidth(2500000)
 	connServer.conn.Write(&c)
-	c = connServer.conn.NewSetChunkSize(uint32(1024))
+	c = connServer.conn.NewSetChunkSize(uint32(configure.GetChunkSize()))
 	connServer.conn.Write(&c)
 
 	resp := make(amf.Object)

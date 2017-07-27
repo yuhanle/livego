@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/livego/av"
-	//"github.com/livego/configure"
+	"github.com/livego/configure"
 	"github.com/livego/container/flv"
 	"github.com/livego/protocol/rtmp/core"
 	//"github.com/livego/protocol/rtmp/rtmprelay"
@@ -13,6 +13,7 @@ import (
 	"github.com/livego/utils/uid"
 	"net"
 	"net/url"
+	"os/exec"
 	"reflect"
 	"strings"
 	"time"
@@ -98,6 +99,22 @@ func (s *Server) Serve(listener net.Listener) (err error) {
 	}
 }
 
+func (s *Server) ExecPush(key string) {
+	execList := configure.GetExecPush()
+
+	for _, execItem := range execList {
+		cmdString := fmt.Sprintf("%s -k %s", execItem, key)
+		go func(cmdString string) {
+			log.Info("ExecPush:", cmdString)
+			cmd := exec.Command("/bin/sh", "-c", cmdString)
+			_, err := cmd.Output()
+			if err != nil {
+				log.Info("Excute error:", err)
+			}
+		}(cmdString)
+	}
+}
+
 func (s *Server) handleConn(conn *core.Conn) error {
 	if err := conn.HandshakeServer(); err != nil {
 		conn.Close()
@@ -136,6 +153,8 @@ func (s *Server) handleConn(conn *core.Conn) error {
 			writer := s.getter.GetWriter(reader.Info())
 			s.handler.HandleWriter(writer)
 		}
+
+		s.ExecPush(reader.Info().Key)
 	} else {
 		writer := NewVirWriter(connServer)
 		log.Infof("new player: %+v", writer.Info())

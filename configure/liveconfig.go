@@ -20,6 +20,8 @@ import (
     "servers":[
         {
         "servername":"live",
+        "exec_push":["./helloworld1", "./helloworld2"],
+        "exec_push_done":["./helloworld1", "./helloworld2"],
 	    "static_push":[{"master_prefix":"live/trans/inke/mlinkm", "upstream":"rtmp://inke.8686c.com/"}],
 	    "static_pull":[{"type":"http-flv",
 	                    "source":"http://pull99.a8.com/live/1500365043587794.flv",
@@ -54,20 +56,23 @@ type StaticPullInfo struct {
 
 type ServerInfo struct {
 	Servername      string
+	Exec_push       []string
+	Exec_push_done  []string
 	Static_push     []StaticPushInfo
 	Static_pull     []StaticPullInfo
 	Sub_static_push []SubStaticPush
 }
 
 type ServerCfg struct {
-	Listen   int
-	Hls      string
-	Hlsport  int
-	Httpflv  string
-	Flvport  int
-	Httpoper string
-	Operport int
-	Servers  []ServerInfo
+	Listen    int
+	Hls       string
+	Hlsport   int
+	Httpflv   string
+	Flvport   int
+	Httpoper  string
+	Operport  int
+	Chunksize int
+	Servers   []ServerInfo
 }
 
 var RtmpServercfg ServerCfg
@@ -92,6 +97,12 @@ func LoadConfig(configfilename string) error {
 	}
 	log.Infof("get config json data:%v", RtmpServercfg)
 
+	if RtmpServercfg.Chunksize == 0 {
+		RtmpServercfg.Chunksize = 4096
+	}
+
+	log.Warning("Chunk size:", RtmpServercfg.Chunksize)
+
 	isStaticPushEnable = false
 	isSubStaticPushEnable = false
 	for _, serverItem := range RtmpServercfg.Servers {
@@ -104,6 +115,32 @@ func LoadConfig(configfilename string) error {
 	}
 
 	return nil
+}
+
+func GetExecPush() []string {
+	var execList []string
+
+	for _, serverItem := range RtmpServercfg.Servers {
+		for _, item := range serverItem.Exec_push {
+			execList = append(execList, item)
+		}
+	}
+	return execList
+}
+
+func GetExecPushDone() []string {
+	var execList []string
+
+	for _, serverItem := range RtmpServercfg.Servers {
+		for _, item := range serverItem.Exec_push_done {
+			execList = append(execList, item)
+		}
+	}
+	return execList
+}
+
+func GetChunkSize() int {
+	return RtmpServercfg.Chunksize
 }
 
 func IsHttpOperEnable() bool {

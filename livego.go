@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/livego/concurrent-map"
 	"github.com/livego/configure"
 	log "github.com/livego/logging"
 	"github.com/livego/protocol/hls"
@@ -167,6 +168,7 @@ func main() {
 		}
 	}()
 	log.Info("start_livego, version", version)
+	log.Info("map hash count", cmap.SHARD_COUNT)
 	err := configure.LoadConfig(*configfilename)
 	if err != nil {
 		return

@@ -3,13 +3,16 @@ package rtmp
 import (
 	"errors"
 	"github.com/livego/av"
+	"github.com/livego/concurrent-map"
+	"github.com/livego/configure"
 	log "github.com/livego/logging"
 	"github.com/livego/protocol/rtmp/cache"
 	"github.com/livego/protocol/rtmp/rtmprelay"
-	"github.com/orcaman/concurrent-map"
-	//"reflect"
+	"reflect"
 	//"strings"
+	"fmt"
 	"io"
+	"os/exec"
 	"time"
 )
 
@@ -67,7 +70,7 @@ func (rs *RtmpStream) HandleReader(r av.ReadCloser) {
 
 func (rs *RtmpStream) HandleWriter(w av.WriteCloser) {
 	info := w.Info()
-	log.Infof("HandleWriter: info[%v]", info)
+	log.Infof("HandleWriter: info[%v], type=%v", info, reflect.TypeOf(w))
 
 	var s *Stream
 	ok := rs.streams.Has(info.Key)
@@ -158,6 +161,7 @@ func (s *Stream) AddWriter(w av.WriteCloser) {
 	info := w.Info()
 	pw := &PackWriterCloser{w: w}
 	s.ws.Set(info.UID, pw)
+
 }
 
 func (s *Stream) StartSubStaticPush() (ret bool) {
@@ -322,10 +326,10 @@ func (s *Stream) TransStart() {
 					time.Sleep(time.Millisecond * 10)
 					continue
 				}
-				log.Info("Stream Read error: call closeInter", s.info, err)
-				s.closeInter()
+				log.Info("Stream Read error:", s.info, err)
 				s.isStart = false
-
+				s.closeInter()
+				return
 			}
 			break
 		}
@@ -338,10 +342,14 @@ func (s *Stream) TransStart() {
 
 		s.cache.Write(p)
 
+		if s.ws.IsEmpty() {
+		    continue
+		}
+
 		for item := range s.ws.IterBuffered() {
 			v := item.Val.(*PackWriterCloser)
 			if !v.init {
-				//log.Printf("cache.send: %v", v.w.Info())
+				//log.Infof("cache.send: %v", v.w.Info())
 				if err := s.cache.Send(v.w); err != nil {
 					log.Infof("[%s] send cache packet error: %v, remove", v.w.Info(), err)
 					s.ws.Remove(item.Key)
@@ -351,9 +359,9 @@ func (s *Stream) TransStart() {
 			} else {
 				new_packet := p
 				//writeType := reflect.TypeOf(v.w)
-				//log.Printf("w.Write: type=%v, %v", writeType, v.w.Info())
+				//log.Infof("w.Write: type=%v, %v", writeType, v.w.Info())
 				if err := v.w.Write(&new_packet); err != nil {
-					log.Infof("[%s] write packet error: %v, remove", v.w.Info(), err)
+					//log.Infof("[%s] write packet error: %v, remove", v.w.Info(), err)
 					s.ws.Remove(item.Key)
 				}
 			}
@@ -394,13 +402,32 @@ func (s *Stream) CheckAlive() (n int) {
 	return
 }
 
+func (s *Stream) ExecPushDone(key string) {
+	execList := configure.GetExecPushDone()
+
+	for _, execItem := range execList {
+		cmdString := fmt.Sprintf("%s -k %s", execItem, key)
+		go func(cmdString string) {
+			log.Info("ExecPushDone:", cmdString)
+			cmd := exec.Command("/bin/sh", "-c", cmdString)
+			_, err := cmd.Output()
+			if err != nil {
+				log.Info("Excute error:", err)
+			}
+		}(cmdString)
+	}
+}
 func (s *Stream) closeInter() {
 	if s.r != nil {
-		s.StopStaticPush()
-		s.StopSubStaticPush()
+		if s.IsSendStaticPush() {
+			s.StopStaticPush()
+		} else if s.IsSubSendStaticPush() {
+			s.StopSubStaticPush()
+		}
 		log.Infof("closeInter: [%v] publisher closed", s.r.Info())
 	}
 
+	s.ExecPushDone(s.r.Info().Key)
 	for item := range s.ws.IterBuffered() {
 		v := item.Val.(*PackWriterCloser)
 		if v.w != nil {
@@ -410,6 +437,5 @@ func (s *Stream) closeInter() {
 				log.Infof("[%v] player closed and remove\n", v.w.Info())
 			}
 		}
-
 	}
 }
