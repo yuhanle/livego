@@ -142,7 +142,8 @@ func startHTTPOpera(stream *rtmp.RtmpStream, l net.Listener) net.Listener {
 		opListen = l
 	}
 
-	opServer := httpopera.NewServer(stream, operaAddr)
+	rtmpAddr := fmt.Sprintf(":%d", configure.GetListenPort())
+	opServer := httpopera.NewServer(stream, rtmpAddr)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
