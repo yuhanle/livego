@@ -30,3 +30,6 @@ livego的rtmp配置是基于json格式，简单好用。<br/>
         }<br/> 
     ]<br/> 
 }<br/> 
+
+## wiki指导
+wiki地址：[https://github.com/runner365/livego/wiki](https://github.com/runner365/livego/wiki)
