@@ -192,6 +192,7 @@ func main() {
 			return
 		} else {
 			//log.Info("not equal", "hls port", configure.GetHlsPort(), "http flv port", configure.GetHttpFlvPort())
+			log.Info("startHTTPFlv...")
 			startHTTPFlv(stream, nil)
 		}
 	}

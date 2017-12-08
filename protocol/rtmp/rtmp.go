@@ -8,6 +8,7 @@ import (
 	"github.com/livego/configure"
 	"github.com/livego/container/flv"
 	"github.com/livego/protocol/rtmp/core"
+	"github.com/livego/record"
 	//"github.com/livego/protocol/rtmp/rtmprelay"
 	log "github.com/livego/logging"
 	"github.com/livego/utils/uid"
@@ -153,7 +154,13 @@ func (s *Server) handleConn(conn *core.Conn) error {
 			writer := s.getter.GetWriter(reader.Info())
 			s.handler.HandleWriter(writer)
 		}
+		if ret, recCfg := configure.IsRecordEnable(url); ret {
+			info := reader.Info()
 
+			recWriter := record.NewRecordWriter(info, recCfg)
+			log.Infof("new publish add record: %v", info)
+			s.handler.HandleWriter(recWriter)
+		}
 		s.ExecPush(reader.Info().Key)
 	} else {
 		writer := NewVirWriter(connServer)

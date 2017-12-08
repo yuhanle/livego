@@ -152,3 +152,18 @@ type WriteCloser interface {
 	CalcTime
 	Write(*Packet) error
 }
+
+func IsH264IFrame(packet []byte) bool {
+	ret := false
+	if packet[0] == 0x17 && packet[1] == 0x00 {
+		//log.Printf("it's pps and sps: messagetype=%d, payloadlen=%d, timestamp=%d, streamid=%d", messagetype, payloadLen, timestamp, streamid)
+		ret = true
+	} else if packet[0] == 0x17 && packet[12] == 0x01 {
+		//log.Printf("it's I frame: messagetype=%d, payloadlen=%d, timestamp=%d, streamid=%d", messagetype, payloadLen, timestamp, streamid)
+		ret = true
+	} else if packet[0] == 0x27 {
+		ret = false
+		//log.Printf("it's P frame: messagetype=%d, payloadlen=%d, timestamp=%d, streamid=%d", messagetype, payloadLen, timestamp, streamid)
+	}
+	return ret
+}

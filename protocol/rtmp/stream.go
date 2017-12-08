@@ -345,6 +345,7 @@ func (s *Stream) TransStart() {
 
 		for item := range s.ws.IterBuffered() {
 			v := item.Val.(*PackWriterCloser)
+			//log.Infof("HandleWriter: info[%v], type=%v", v.w.Info(), reflect.TypeOf(v.w))
 			if !v.init {
 				//log.Infof("cache.send: %v", v.w.Info())
 				if err := s.cache.Send(v.w); err != nil {
@@ -358,7 +359,7 @@ func (s *Stream) TransStart() {
 				//writeType := reflect.TypeOf(v.w)
 				//log.Infof("w.Write: type=%v, %v", writeType, v.w.Info())
 				if err := v.w.Write(&new_packet); err != nil {
-					//log.Infof("[%s] write packet error: %v, remove", v.w.Info(), err)
+					//log.Errorf("[%s] write packet error: %v, remove", v.w.Info(), err)
 					s.ws.Remove(item.Key)
 				}
 			}
@@ -433,9 +434,11 @@ func (s *Stream) closeInter() {
 		v := item.Val.(*PackWriterCloser)
 		if v.w != nil {
 			if v.w.Info().IsInterval() {
-				v.w.Close(errors.New("closed"))
-				s.ws.Remove(item.Key)
-				log.Infof("[%v] player closed and remove\n", v.w.Info())
+				go func() {
+					v.w.Close(errors.New("closed"))
+					s.ws.Remove(item.Key)
+					log.Infof("[%v] player closed and remove\n", v.w.Info())
+				}()
 			}
 		}
 	}
