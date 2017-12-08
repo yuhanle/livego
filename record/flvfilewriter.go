@@ -75,9 +75,27 @@ func (self *FlvFileWriter) WriterPacket(p *av.Packet) error {
 	typeID := av.TAG_VIDEO
 	if !p.IsVideo {
 		if p.IsMetadata {
+			log.Infof("record flv drop metadata:%02x %02x", p.Data[0], p.Data[1])
 			return nil
 		} else {
+			aHdr, ok := p.Header.(av.AudioPacketHeader)
+			if !ok {
+				log.Error("flv file write audio header error")
+				return errors.New(fmt.Sprintf("flv file write audio header error"))
+			}
+			if (aHdr.AACPacketType() == av.SOUND_AAC) && (aHdr.SoundFormat() == av.AAC_SEQHDR) {
+				log.Infof("record flv audio header:%02x %02x", p.Data[0], p.Data[1])
+			}
 			typeID = av.TAG_AUDIO
+		}
+	} else {
+		vHdr, ok := p.Header.(av.VideoPacketHeader)
+		if !ok {
+			log.Error("flv file write video header error")
+			return errors.New(fmt.Sprintf("flv file write video header error"))
+		}
+		if vHdr.IsSeq() {
+			log.Infof("video header info:%02x %02x %02x %02x", p.Data[0], p.Data[1], p.Data[2], p.Data[3])
 		}
 	}
 
