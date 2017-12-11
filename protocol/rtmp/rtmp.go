@@ -7,10 +7,9 @@ import (
 	"github.com/livego/av"
 	"github.com/livego/configure"
 	"github.com/livego/container/flv"
+	log "github.com/livego/logging"
 	"github.com/livego/protocol/rtmp/core"
 	"github.com/livego/record"
-	//"github.com/livego/protocol/rtmp/rtmprelay"
-	log "github.com/livego/logging"
 	"github.com/livego/utils/uid"
 	"net"
 	"net/url"
@@ -21,8 +20,7 @@ import (
 )
 
 const (
-	maxQueueNum           = 1024
-	SAVE_STATICS_INTERVAL = 5000
+	maxQueueNum = 1024
 )
 
 var (
@@ -182,27 +180,13 @@ type StreamReadWriteCloser interface {
 	Read(c *core.ChunkStream) error
 }
 
-type StaticsBW struct {
-	StreamId               uint32
-	PeerIP                 string
-	VideoDatainBytes       uint64
-	LastVideoDatainBytes   uint64
-	VideoSpeedInBytesperMS uint64
-
-	AudioDatainBytes       uint64
-	LastAudioDatainBytes   uint64
-	AudioSpeedInBytesperMS uint64
-
-	LastTimestamp int64
-}
-
 type VirWriter struct {
 	Uid    string
 	closed bool
 	av.RWBaser
 	conn        StreamReadWriteCloser
 	packetQueue chan *av.Packet
-	WriteBWInfo StaticsBW
+	WriteBWInfo av.StaticsBW
 }
 
 func NewVirWriter(conn StreamReadWriteCloser) *VirWriter {
@@ -211,7 +195,7 @@ func NewVirWriter(conn StreamReadWriteCloser) *VirWriter {
 		conn:        conn,
 		RWBaser:     av.NewRWBaser(time.Second * time.Duration(*writeTimeout)),
 		packetQueue: make(chan *av.Packet, maxQueueNum),
-		WriteBWInfo: StaticsBW{0, "", 0, 0, 0, 0, 0, 0, 0},
+		WriteBWInfo: av.StaticsBW{0, "", 0, 0, 0, 0, 0, 0, 0},
 	}
 
 	go ret.Check()
@@ -238,7 +222,7 @@ func (v *VirWriter) SaveStatics(streamid uint32, length uint64, isVideoFlag bool
 
 	if v.WriteBWInfo.LastTimestamp == 0 {
 		v.WriteBWInfo.LastTimestamp = nowInMS
-	} else if (nowInMS - v.WriteBWInfo.LastTimestamp) >= SAVE_STATICS_INTERVAL {
+	} else if (nowInMS - v.WriteBWInfo.LastTimestamp) >= av.SAVE_STATICS_INTERVAL {
 		diffTimestamp := (nowInMS - v.WriteBWInfo.LastTimestamp) / 1000
 
 		v.WriteBWInfo.VideoSpeedInBytesperMS = (v.WriteBWInfo.VideoDatainBytes - v.WriteBWInfo.LastVideoDatainBytes) * 8 / uint64(diffTimestamp) / 1000
@@ -380,7 +364,7 @@ type VirReader struct {
 	av.RWBaser
 	demuxer    *flv.Demuxer
 	conn       StreamReadWriteCloser
-	ReadBWInfo StaticsBW
+	ReadBWInfo av.StaticsBW
 }
 
 func NewVirReader(conn StreamReadWriteCloser) *VirReader {
@@ -389,7 +373,7 @@ func NewVirReader(conn StreamReadWriteCloser) *VirReader {
 		conn:       conn,
 		RWBaser:    av.NewRWBaser(time.Second * time.Duration(*writeTimeout)),
 		demuxer:    flv.NewDemuxer(),
-		ReadBWInfo: StaticsBW{0, "", 0, 0, 0, 0, 0, 0, 0},
+		ReadBWInfo: av.StaticsBW{0, "", 0, 0, 0, 0, 0, 0, 0},
 	}
 }
 
@@ -407,7 +391,7 @@ func (v *VirReader) SaveStatics(streamid uint32, length uint64, isVideoFlag bool
 
 	if v.ReadBWInfo.LastTimestamp == 0 {
 		v.ReadBWInfo.LastTimestamp = nowInMS
-	} else if (nowInMS - v.ReadBWInfo.LastTimestamp) >= SAVE_STATICS_INTERVAL {
+	} else if (nowInMS - v.ReadBWInfo.LastTimestamp) >= av.SAVE_STATICS_INTERVAL {
 		diffTimestamp := (nowInMS - v.ReadBWInfo.LastTimestamp) / 1000
 
 		//log.Printf("now=%d, last=%d, diff=%d", nowInMS, v.ReadBWInfo.LastTimestamp, diffTimestamp)

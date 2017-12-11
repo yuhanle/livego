@@ -8,6 +8,7 @@ import (
 	"github.com/livego/concurrent-map"
 	"github.com/livego/configure"
 	log "github.com/livego/logging"
+	"github.com/livego/protocol/httpflv"
 	"github.com/livego/protocol/rtmp"
 	"github.com/livego/protocol/rtmp/rtmprelay"
 	"io"
@@ -151,13 +152,13 @@ func (s *Server) Serve(l net.Listener) error {
 
 type Stream struct {
 	Key             string `json:"key"`
-	Url             string `json:"Url"`
-	PeerIP          string `json:"PeerIP"`
-	StreamId        uint32 `json:"StreamId"`
-	VideoTotalBytes uint64 `json:123456`
-	VideoSpeed      uint64 `json:123456`
-	AudioTotalBytes uint64 `json:123456`
-	AudioSpeed      uint64 `json:123456`
+	Url             string `json:"url"`
+	PeerIP          string `json:"peerip"`
+	StreamId        uint32 `json:"streamid"`
+	VideoTotalBytes uint64 `json:videototal`
+	VideoSpeed      uint64 `json:videospeed`
+	AudioTotalBytes uint64 `json:audiototal`
+	AudioSpeed      uint64 `json:audiospeed`
 }
 
 type Streams struct {
@@ -201,6 +202,12 @@ func (server *Server) GetLiveStatics(w http.ResponseWriter, req *http.Request) {
 					switch pw.GetWriter().(type) {
 					case *rtmp.VirWriter:
 						v := pw.GetWriter().(*rtmp.VirWriter)
+						msg := Stream{item.Key, v.Info().URL, v.WriteBWInfo.PeerIP, v.WriteBWInfo.StreamId, v.WriteBWInfo.VideoDatainBytes, v.WriteBWInfo.VideoSpeedInBytesperMS,
+							v.WriteBWInfo.AudioDatainBytes, v.WriteBWInfo.AudioSpeedInBytesperMS}
+						msgs.Players = append(msgs.Players, msg)
+						msgs.PlayerNumber++
+					case *httpflv.FLVWriter:
+						v := pw.GetWriter().(*httpflv.FLVWriter)
 						msg := Stream{item.Key, v.Info().URL, v.WriteBWInfo.PeerIP, v.WriteBWInfo.StreamId, v.WriteBWInfo.VideoDatainBytes, v.WriteBWInfo.VideoSpeedInBytesperMS,
 							v.WriteBWInfo.AudioDatainBytes, v.WriteBWInfo.AudioSpeedInBytesperMS}
 						msgs.Players = append(msgs.Players, msg)

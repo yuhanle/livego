@@ -25,20 +25,24 @@ type FLVWriter struct {
 	closed          bool
 	closedChan      chan struct{}
 	ctx             http.ResponseWriter
+	req             *http.Request
 	packetQueue     chan *av.Packet
+	WriteBWInfo     av.StaticsBW
 }
 
-func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
+func NewFLVWriter(app, title, url string, req *http.Request, ctx http.ResponseWriter) *FLVWriter {
 	ret := &FLVWriter{
 		Uid:         uid.NewId(),
 		app:         app,
 		title:       title,
 		url:         url,
+		req:         req,
 		ctx:         ctx,
 		RWBaser:     av.NewRWBaser(time.Second * 10),
 		closedChan:  make(chan struct{}),
 		buf:         make([]byte, headerLen),
 		packetQueue: make(chan *av.Packet, maxQueueNum),
+		WriteBWInfo: av.StaticsBW{0, "", 0, 0, 0, 0, 0, 0, 0},
 	}
 
 	ret.ctx.Write([]byte{0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09})
@@ -102,6 +106,31 @@ func (flvWriter *FLVWriter) Write(p *av.Packet) (err error) {
 	return
 }
 
+func (flvWriter *FLVWriter) SaveStatics(streamid uint32, length uint64, isVideoFlag bool) {
+	nowInMS := int64(time.Now().UnixNano() / 1e6)
+
+	flvWriter.WriteBWInfo.PeerIP = flvWriter.req.RemoteAddr
+	flvWriter.WriteBWInfo.StreamId = streamid
+	if isVideoFlag {
+		flvWriter.WriteBWInfo.VideoDatainBytes = flvWriter.WriteBWInfo.VideoDatainBytes + length
+	} else {
+		flvWriter.WriteBWInfo.AudioDatainBytes = flvWriter.WriteBWInfo.AudioDatainBytes + length
+	}
+
+	if flvWriter.WriteBWInfo.LastTimestamp == 0 {
+		flvWriter.WriteBWInfo.LastTimestamp = nowInMS
+	} else if (nowInMS - flvWriter.WriteBWInfo.LastTimestamp) >= av.SAVE_STATICS_INTERVAL {
+		diffTimestamp := (nowInMS - flvWriter.WriteBWInfo.LastTimestamp) / 1000
+
+		flvWriter.WriteBWInfo.VideoSpeedInBytesperMS = (flvWriter.WriteBWInfo.VideoDatainBytes - flvWriter.WriteBWInfo.LastVideoDatainBytes) * 8 / uint64(diffTimestamp) / 1000
+		flvWriter.WriteBWInfo.AudioSpeedInBytesperMS = (flvWriter.WriteBWInfo.AudioDatainBytes - flvWriter.WriteBWInfo.LastAudioDatainBytes) * 8 / uint64(diffTimestamp) / 1000
+
+		flvWriter.WriteBWInfo.LastVideoDatainBytes = flvWriter.WriteBWInfo.VideoDatainBytes
+		flvWriter.WriteBWInfo.LastAudioDatainBytes = flvWriter.WriteBWInfo.AudioDatainBytes
+		flvWriter.WriteBWInfo.LastTimestamp = nowInMS
+	}
+}
+
 func (flvWriter *FLVWriter) SendPacket() error {
 	for {
 		p, ok := <-flvWriter.packetQueue
@@ -119,8 +148,14 @@ func (flvWriter *FLVWriter) SendPacket() error {
 					}
 				} else {
 					typeID = av.TAG_AUDIO
+					packetLen := len(p.Data) + 12
+					flvWriter.SaveStatics(p.StreamID, uint64(packetLen), false)
 				}
+			} else {
+				packetLen := len(p.Data) + 12
+				flvWriter.SaveStatics(p.StreamID, uint64(packetLen), true)
 			}
+
 			dataLen := len(p.Data)
 			timestamp := p.TimeStamp
 			timestamp += flvWriter.BaseTimeStamp()

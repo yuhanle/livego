@@ -102,7 +102,7 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	writer := NewFLVWriter(paths[0], paths[1], url, w)
+	writer := NewFLVWriter(paths[0], paths[1], url, r, w)
 
 	server.handler.HandleWriter(writer)
 	writer.Wait()

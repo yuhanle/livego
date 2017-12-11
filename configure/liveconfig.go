@@ -23,19 +23,8 @@ import (
         "exec_push":["./helloworld1", "./helloworld2"],
         "exec_push_done":["./helloworld1", "./helloworld2"],
         "report":["127.0.0.1"],
-	    "static_push":[{"master_prefix":"live/trans/inke/mlinkm", "upstream":"rtmp://inke.8686c.com/"}],
-	    "static_pull":[{"type":"http-flv",
-	                    "source":"http://pull99.a8.com/live/1500365043587794.flv",
-	                    "app":"live",
-	                    "stream":"1500365043587794"},
-	                    {"type":"rtmp",
-	                    "source":"rtmp://pull99.a8.com/live/1500365043587794",
-	                    "app":"live",
-	                    "stream":"1500365043587794"}
-	                  ],
-	    "sub_static_push":[{"master_prefix":"live/trans/inke/mlinkm", "sub_prefix":"live/trans/inke/mlinks"}],
 	    "record":[{"master_prefix":"live", "type":"flv",
-                   "path":"/Users/shiwei/Documents/record"}]
+                   "path":"/Users/xxxx/Documents/record"}]
         }
     ]
 }
