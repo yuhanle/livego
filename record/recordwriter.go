@@ -67,11 +67,12 @@ func NewRecordWriter(info av.Info, recCfg configure.RecordConfig) *RecordWriter 
 	}
 
 	go recW.onWork()
-	go recW.onCheck()
+	//go recW.onCheck()
 
 	return recW
 }
 
+/*
 func (self *RecordWriter) onCheck() {
 	for {
 		<-time.After(1000 * time.Millisecond)
@@ -82,7 +83,7 @@ func (self *RecordWriter) onCheck() {
 	}
 	self.Close(errors.New("record write alive timeout"))
 }
-
+*/
 func (self *RecordWriter) onWork() {
 	self.flvWriter.WriterHeader()
 	for {

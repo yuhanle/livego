@@ -180,11 +180,17 @@ func (self *FlvPull) sendPublishChunkStream() {
 		case _, ok := <-self.flvErrChan:
 			if ok {
 				log.Info("flvErrChan get message....")
-				self.flvclient.Stop()
+				if self.flvclient != nil {
+					self.flvclient.Stop()
+					self.flvclient = nil
+				}
+
 				self.clean()
 
+				self.flvclient = httpflvclient.NewHttpFlvClient(self.FlvUrl)
 				err := self.flvclient.Start(self)
 				if err != nil {
+					self.flvclient = nil
 					log.Errorf("On_running flvclient start error:%v", err)
 					time.Sleep(2 * time.Second)
 					go self.StatusReport(httpflvclient.FLV_ERROR)
@@ -196,6 +202,7 @@ func (self *FlvPull) sendPublishChunkStream() {
 				self.rtmpclient = core.NewConnClient()
 				err = self.rtmpclient.Start(self.RtmpUrl, "publish")
 				if err != nil {
+					self.rtmpclient = nil
 					log.Errorf("On_running rtmpclient.Start url=%v error=%v", self.RtmpUrl, err)
 					go self.StatusReport(httpflvclient.RTMP_ERROR)
 					log.Infof("rtmpclient.Start error: insert rtmpErrChan")
@@ -212,6 +219,7 @@ func (self *FlvPull) sendPublishChunkStream() {
 				self.rtmpclient = core.NewConnClient()
 				err := self.rtmpclient.Start(self.RtmpUrl, "publish")
 				if err != nil {
+					self.rtmpclient = nil
 					log.Errorf("On_running rtmpclient.Start url=%v error=%v", self.RtmpUrl, err)
 					go self.StatusReport(httpflvclient.RTMP_ERROR)
 					log.Infof("rtmpclient.Start error: insert rtmpErrChan")
@@ -248,6 +256,7 @@ func (self *FlvPull) Start() error {
 	self.clean()
 	err := self.flvclient.Start(self)
 	if err != nil {
+		self.flvclient = nil
 		log.Errorf("flvclient start error:%v", err)
 		close(self.csChan)
 		return err
@@ -255,9 +264,11 @@ func (self *FlvPull) Start() error {
 
 	err = self.rtmpclient.Start(self.RtmpUrl, "publish")
 	if err != nil {
+		self.rtmpclient = nil
 		log.Errorf("rtmpclient.Start url=%v error", self.RtmpUrl)
 
 		self.flvclient.Stop()
+		self.flvclient = nil
 		self.clean()
 		close(self.csChan)
 		return err
@@ -280,6 +291,7 @@ func (self *FlvPull) Stop() {
 	self.isStart = false
 
 	self.flvclient.Stop()
+	self.flvclient = nil
 	self.clean()
 	self.rtmpclient.Close(nil)
 
