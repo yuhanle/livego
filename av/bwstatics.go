@@ -14,4 +14,11 @@ type StaticsBW struct {
 	LastTimestamp int64
 }
 
+type HLS_STATICS_BW struct {
+	DatainBytes     uint64
+	LastDatainBytes uint64
+	SpeedInBytes    uint64
+	LastTimestamp   int64
+}
+
 const SAVE_STATICS_INTERVAL = 5000

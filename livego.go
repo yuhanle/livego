@@ -130,7 +130,7 @@ func startHTTPFlv(stream *rtmp.RtmpStream, l net.Listener) net.Listener {
 	return flvListen
 }
 
-func startHTTPOpera(stream *rtmp.RtmpStream, l net.Listener) net.Listener {
+func startHTTPOpera(stream *rtmp.RtmpStream, l net.Listener, hlsServer *hls.Server) net.Listener {
 	var opListen net.Listener
 	var err error
 
@@ -145,7 +145,7 @@ func startHTTPOpera(stream *rtmp.RtmpStream, l net.Listener) net.Listener {
 	}
 
 	rtmpAddr := fmt.Sprintf(":%d", configure.GetListenPort())
-	opServer := httpopera.NewServer(stream, rtmpAddr)
+	opServer := httpopera.NewServer(stream, rtmpAddr, hlsServer)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -218,7 +218,7 @@ func main() {
 		} else {
 			//log.Info("hls port", configure.GetHlsPort(), "http flv", configure.GetHttpFlvPort(),
 			//	"http oper port", configure.GetHttpOperPort())
-			startHTTPOpera(stream, nil)
+			startHTTPOpera(stream, nil, hlsServer)
 		}
 	}
 

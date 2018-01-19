@@ -8,6 +8,7 @@ import (
 	"github.com/livego/concurrent-map"
 	"github.com/livego/configure"
 	log "github.com/livego/logging"
+	"github.com/livego/protocol/hls"
 	"github.com/livego/protocol/httpflv"
 	"github.com/livego/protocol/rtmp"
 	"github.com/livego/protocol/rtmp/rtmprelay"
@@ -65,15 +66,17 @@ type Server struct {
 	sessionMRelay cmap.ConcurrentMap //map[string]*rtmprelay.MultipleReley, key为instanceid
 	mrelayMutex   sync.RWMutex
 	rtmpAddr      string
+	hlsServer     *hls.Server
 }
 
-func NewServer(h av.Handler, rtmpAddr string) *Server {
+func NewServer(h av.Handler, rtmpAddr string, hlsServer *hls.Server) *Server {
 	return &Server{
 		handler:       h,
 		session:       make(map[string]*rtmprelay.RtmpRelay),
 		sessionFlv:    make(map[string]*rtmprelay.FlvPull),
 		sessionMRelay: cmap.New(),
 		rtmpAddr:      rtmpAddr,
+		hlsServer:     hlsServer,
 	}
 }
 
@@ -133,6 +136,9 @@ func (s *Server) Serve(l net.Listener) error {
 	mux.HandleFunc("/control/multiplerelay/remove", func(w http.ResponseWriter, r *http.Request) {
 		s.handleMultipleRelayRemove(w, r)
 	})
+	mux.HandleFunc("/stat/hlsstat", func(w http.ResponseWriter, r *http.Request) {
+		s.GetHlsStatics(w, r)
+	})
 
 	mux.HandleFunc("/stat/livestat", func(w http.ResponseWriter, r *http.Request) {
 		s.GetLiveStatics(w, r)
@@ -148,6 +154,38 @@ func (s *Server) Serve(l net.Listener) error {
 
 	http.Serve(l, mux)
 	return nil
+}
+
+type HlsStream struct {
+	Key       string `json:"key"`
+	DataBytes uint64 `json:"databytes"`
+	Speed     uint64 `json:"speed"`
+}
+
+type HlsStreams struct {
+	HlsNumber int
+	HlsPlays  []HlsStream
+}
+
+func (server *Server) GetHlsStatics(w http.ResponseWriter, req *http.Request) {
+	var info HlsStreams
+	if server.hlsServer != nil {
+		staticsMap := server.hlsServer.GetAllStatics()
+		playList := staticsMap.Items()
+		for key, item := range playList {
+			var hlsstream HlsStream
+			hlsstream.Key = key
+			hlsstream.DataBytes = item.(*av.HLS_STATICS_BW).DatainBytes
+			hlsstream.Speed = item.(*av.HLS_STATICS_BW).SpeedInBytes
+
+			info.HlsPlays = append(info.HlsPlays, hlsstream)
+		}
+		info.HlsNumber = len(info.HlsPlays)
+	}
+
+	data, _ := json.Marshal(info)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
 }
 
 type Stream struct {

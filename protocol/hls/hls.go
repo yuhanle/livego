@@ -34,13 +34,16 @@ var crossdomainxml = []byte(`<?xml version="1.0" ?>
 type Server struct {
 	listener net.Listener
 	conns    cmap.ConcurrentMap
+	statics  cmap.ConcurrentMap
 }
 
 func NewServer() *Server {
 	ret := &Server{
-		conns: cmap.New(),
+		conns:   cmap.New(),
+		statics: cmap.New(),
 	}
 	go ret.checkStop()
+	go ret.resetStatics()
 	return ret
 }
 
@@ -93,6 +96,73 @@ func (server *Server) checkStop() {
 	}
 }
 
+func (server *Server) resetStatics() {
+	for {
+		<-time.After(60 * time.Second)
+		var removeKeys []string
+		for key, _ := range server.statics.Items() {
+			removeKeys = append(removeKeys, key)
+		}
+
+		for _, delKey := range removeKeys {
+			server.statics.Remove(delKey)
+		}
+	}
+}
+
+func (server *Server) GetAllStatics() (statics cmap.ConcurrentMap) {
+	var removeKeys []string
+	staticsMap := server.statics.Items()
+
+	statics = cmap.New()
+	for key, value := range staticsMap {
+		conn := server.getConn(key)
+		if conn == nil {
+			log.Warningf("hls key=%s has been removed", key)
+			removeKeys = append(removeKeys, key)
+		} else {
+			statics.Set(key, value)
+		}
+	}
+
+	for _, removeKey := range removeKeys {
+		server.statics.Remove(removeKey)
+	}
+	return
+}
+
+func (server *Server) setStatics(key string, length int) {
+	info, ok := server.statics.Get(key)
+	if !ok {
+		info = &av.HLS_STATICS_BW{
+			DatainBytes:     0,
+			LastDatainBytes: 0,
+			SpeedInBytes:    0,
+			LastTimestamp:   0,
+		}
+		server.statics.Set(key, info)
+	}
+
+	//log.Infof("hls_setStatics key=%s, length=%d", key, length)
+	info.(*av.HLS_STATICS_BW).DatainBytes += uint64(length)
+
+	now := int64(time.Now().UnixNano() / (1000 * 1000))
+
+	log.Infof("hls_setStatics key=%s, now=%v, LastTimestamp=%v, difftime=%v",
+		key, now, info.(*av.HLS_STATICS_BW).LastTimestamp, now-info.(*av.HLS_STATICS_BW).LastTimestamp)
+	if info.(*av.HLS_STATICS_BW).LastTimestamp == 0 {
+		info.(*av.HLS_STATICS_BW).LastTimestamp = now
+	} else if (now - info.(*av.HLS_STATICS_BW).LastTimestamp) > duration {
+		diffData := info.(*av.HLS_STATICS_BW).DatainBytes - info.(*av.HLS_STATICS_BW).LastDatainBytes
+
+		log.Infof("hls_setStatics key=%s, DatainBytes=%d, LastDatainBytes=%d, diffData=%d",
+			key, info.(*av.HLS_STATICS_BW).DatainBytes, info.(*av.HLS_STATICS_BW).LastDatainBytes, diffData)
+		info.(*av.HLS_STATICS_BW).SpeedInBytes = uint64(diffData) * 1000 / (uint64(now) - uint64(info.(*av.HLS_STATICS_BW).LastTimestamp))
+		info.(*av.HLS_STATICS_BW).LastTimestamp = now
+		info.(*av.HLS_STATICS_BW).LastDatainBytes = info.(*av.HLS_STATICS_BW).DatainBytes
+	}
+}
+
 func (server *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if path.Base(r.URL.Path) == "crossdomain.xml" {
 		w.Header().Set("Content-Type", "application/xml")
@@ -126,6 +196,8 @@ func (server *Server) handle(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-mpegURL")
 		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 		w.Write(body)
+
+		server.setStatics(key, len(body))
 	case ".ts":
 		key, _ := server.parseTs(r.URL.Path)
 		conn := server.getConn(key)
@@ -145,6 +217,8 @@ func (server *Server) handle(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "video/mp2ts")
 		w.Header().Set("Content-Length", strconv.Itoa(len(item.Data)))
 		w.Write(item.Data)
+
+		server.setStatics(key, len(item.Data))
 	}
 }
 
